@@ -1,0 +1,43 @@
+{
+  "fps": 60,
+  "width": 340,
+  "height": 380,
+  "orb_y": 120,
+  "margin": 16,
+  "opacity": 0.96,
+  "fade_seconds": 0.27,
+  "mic_full_scale": 4000,
+
+  "bars": 56,
+  "rings": [
+    { "radius": 98,  "start": 0,   "length": 70,  "width": 2, "speed": 1.0 },
+    { "radius": 98,  "start": 180, "length": 70,  "width": 2, "speed": 1.0 },
+    { "radius": 107, "start": 90,  "length": 110, "width": 3, "speed": -0.6 },
+    { "radius": 115, "start": 30,  "length": 40,  "width": 1, "speed": 1.6 },
+    { "radius": 115, "start": 210, "length": 40,  "width": 1, "speed": 1.6 }
+  ],
+
+  "colors": {
+    "starting": "#5c7a99",
+    "sleeping": "#1f5f8b",
+    "listening": "#00e5ff",
+    "thinking": "#b388ff",
+    "speaking": "#4fc3f7",
+    "error": "#ff5252"
+  },
+  "spin": {
+    "starting": 60,
+    "sleeping": 9,
+    "listening": 30,
+    "thinking": 120,
+    "speaking": 45,
+    "error": 0
+  },
+
+  "font": "Segoe UI",
+  "heard_font_size": 10,
+  "reply_font_size": 11,
+  "heard_color": "#8a97a6",
+  "reply_color": "#eef8ff",
+  "panel_color": "#10151c"
+}

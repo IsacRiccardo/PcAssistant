@@ -1,0 +1,21 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+  "python.terminal.activateEnvironment": true,
+  "files.exclude": {
+    "**/__pycache__": true
+  },
+  "VsCodeTaskButtons.tasks": [
+    {
+      "label": "Run Jarvis (voice)",
+      "task": "Run Jarvis (voice)"
+    },
+    {
+      "label": "Run Jarvis (text mode)",
+      "task": "Run Jarvis (text mode)"
+    },
+    {
+      "label": "Configure Jarvis",
+      "task": "Configure Jarvis (settings)"
+    }
+  ]
+}

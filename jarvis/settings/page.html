@@ -1,0 +1,1569 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jarvis settings</title>
+<style>
+:root {
+  --bg: #090d12;
+  --surface: #0f151d;
+  --surface-2: #131b25;
+  --surface-3: #19232f;
+  --line: #1e2834;
+  --line-2: #2a3644;
+  --text: #e6eef6;
+  --muted: #8a97a6;
+  --faint: #5d6a7a;
+  --accent: #00e5ff;
+  --accent-ink: #00262b;
+  --accent-soft: rgba(0, 229, 255, .09);
+  --accent-line: rgba(0, 229, 255, .38);
+  --warn: #ffb74d;
+  --warn-soft: rgba(255, 183, 77, .09);
+  --danger: #ff6b6b;
+  --danger-soft: rgba(255, 107, 107, .09);
+  --ok: #5ee0a0;
+  --r: 10px;
+  --r-sm: 7px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 14px/1.5 "Segoe UI", system-ui, sans-serif;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+
+/* layout */
+.app { display: grid; grid-template-columns: 236px minmax(0, 1fr); grid-template-rows: 60px minmax(0, 1fr); height: 100vh; }
+header {
+  grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; padding: 0 20px;
+  background: var(--surface); border-bottom: 1px solid var(--line);
+}
+.logo {
+  width: 26px; height: 26px; border-radius: 50%; flex: none;
+  background: radial-gradient(circle, #c9f8ff 0 26%, var(--accent) 28% 36%, transparent 38%);
+  box-shadow: 0 0 0 1.5px var(--accent-line), 0 0 16px rgba(0, 229, 255, .3);
+}
+.brand { font-weight: 600; font-size: 15px; letter-spacing: .01em; }
+.brand span { color: var(--muted); font-weight: 400; }
+.spacer { flex: 1; }
+.pill { font-size: 12.5px; padding: 3px 10px; border-radius: 999px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
+.pill.dirty { color: var(--warn); background: var(--warn-soft); }
+.pill.saved { color: var(--ok); }
+nav { border-right: 1px solid var(--line); padding: 14px 10px; display: flex; flex-direction: column; gap: 2px; overflow: auto; background: var(--surface); }
+.nav-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--muted); text-align: left;
+}
+.nav-item:hover { background: var(--surface-2); color: var(--text); }
+.nav-item.active { background: var(--accent-soft); color: var(--text); }
+.nav-item.active .icon { color: var(--accent); }
+.nav-label { flex: 1; }
+.nav-mark { width: 7px; height: 7px; border-radius: 50%; }
+.nav-item.changed .nav-mark { background: var(--warn); }
+.nav-item.invalid .nav-mark { background: var(--danger); }
+.nav-foot { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--line); display: grid; gap: 2px; }
+.nav-foot .nav-item { font-size: 13px; }
+.nav-paths { font-size: 12px; color: var(--faint); padding: 8px 10px 0; line-height: 1.6; word-break: break-all; }
+main { overflow: auto; }
+.content { max-width: 860px; padding: 28px 32px 96px; }
+.content.wide { max-width: 1240px; }
+
+/* section */
+.section-head { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 20px; }
+.section-head > div { flex: 1; }
+h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
+.intro { color: var(--muted); margin: 0; max-width: 64ch; }
+.cards { display: grid; gap: 18px; min-width: 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); min-width: 0; }
+.card h2 { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0; padding: 14px 18px 0; }
+.field { padding: 16px 18px; }
+.card-body > .field + .field { border-top: 1px solid var(--line); }
+.field-head { display: flex; align-items: center; gap: 10px; min-height: 26px; }
+.label { font-weight: 600; flex: 1; }
+.help { color: var(--muted); font-size: 13px; margin: 2px 0 10px; max-width: 70ch; }
+.field-head + .pick, .field-head + .chips, .field-head + .slider, .field-head + .table, .field-head + div, .field-head + input, .field-head + textarea, .field-head + span { margin-top: 8px; }
+.error { color: var(--danger); font-size: 13px; margin-top: 6px; }
+.error:empty { display: none; }
+.field.invalid input:focus, .field.invalid select:focus { outline-color: rgba(255, 107, 107, .5); }
+.field.flash { animation: flash 1.6s ease-out; }
+@keyframes flash { from { background: var(--accent-soft); } to { background: transparent; } }
+.reset {
+  display: inline-flex; align-items: center; gap: 4px; border: 0; background: transparent; color: var(--muted);
+  font-size: 12.5px; padding: 2px 6px; border-radius: 6px;
+}
+.reset:hover { color: var(--accent); background: var(--accent-soft); }
+
+/* controls */
+input[type=text], input[type=number], textarea, select {
+  width: 100%; background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r-sm);
+  padding: 7px 10px; min-height: 36px;
+}
+textarea { resize: vertical; line-height: 1.55; }
+select { cursor: pointer; }
+input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent-line); outline-offset: 0; border-color: var(--accent); }
+input.bad { border-color: var(--danger); }
+.num { display: inline-flex; align-items: center; gap: 8px; }
+.num input { width: 104px; }
+.unit { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.slider { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: center; }
+input[type=range] { width: 100%; accent-color: var(--accent); margin: 0; }
+.ends { display: flex; justify-content: space-between; font-size: 12px; color: var(--faint); margin-top: 2px; }
+.pick-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.pick-row:has(.other:not([hidden])) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.hint { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.hint:empty { display: none; }
+.hint .ok { color: var(--ok); }
+.hint .warn { color: var(--warn); }
+.inline { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.color { display: inline-flex; align-items: center; gap: 8px; }
+.color input[type=color] { width: 36px; height: 36px; padding: 2px; border: 1px solid var(--line-2); border-radius: var(--r-sm); background: var(--surface-2); cursor: pointer; }
+.color input.hex { width: 104px; font-family: Consolas, "Cascadia Mono", monospace; font-size: 13px; }
+.check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; color: var(--muted); }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px; background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r-sm); cursor: text; }
+.chips:focus-within { outline: 2px solid var(--accent-line); border-color: var(--accent); }
+.chip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 3px 2px 10px; border-radius: 999px; background: var(--surface-3); border: 1px solid var(--line-2); font-size: 13px; }
+.chip button { width: 20px; height: 20px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); line-height: 1; padding: 0; }
+.chip button:hover { background: var(--danger-soft); color: var(--danger); }
+.chips input { flex: 1; min-width: 150px; border: 0 !important; outline: 0 !important; background: transparent !important; min-height: 26px !important; padding: 2px 6px !important; }
+.chips.fixed { cursor: default; min-height: 38px; align-items: center; }
+.chips .empty { padding: 0 6px; }
+.picks { display: grid; gap: 8px; }
+
+.table { display: grid; gap: 8px; }
+.rows { display: grid; gap: 8px; }
+.row { display: grid; grid-template-columns: var(--cols); gap: 8px; align-items: center; }
+.row.head { font-size: 12px; color: var(--faint); }
+.row.head span { padding-left: 2px; }
+.empty { color: var(--faint); margin: 0; font-size: 13px; }
+.table .add { justify-self: start; }
+.states .row { --cols: minmax(0, 1fr) 152px 140px; padding: 4px 6px; border-radius: 8px; }
+.states .row.active { background: var(--accent-soft); }
+.state-name { border: 0; background: transparent; text-align: left; padding: 4px 0; display: grid; }
+.state-name small { color: var(--muted); font-size: 12px; }
+.state-name:hover b { color: var(--accent); }
+.rings .row:not(.head):hover, .rings .row:focus-within { background: var(--accent-soft); border-radius: 8px; }
+.rings .row input { min-width: 0; }
+
+/* buttons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 14px;
+  border-radius: 8px; border: 1px solid var(--line-2); background: var(--surface-2); font-weight: 600; white-space: nowrap;
+}
+.btn:hover { border-color: var(--faint); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+.btn.ghost:hover { color: var(--text); background: var(--surface-2); }
+.btn.small { height: 30px; padding: 0 10px; font-size: 13px; }
+.btn.danger:hover { color: var(--danger); }
+.icon-btn {
+  display: inline-grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 7px;
+  background: transparent; color: var(--muted);
+}
+.icon-btn:hover { background: var(--danger-soft); color: var(--danger); }
+.icon { display: inline-grid; place-items: center; flex: none; }
+kbd { font: 11px Consolas, monospace; padding: 1px 5px; border-radius: 4px; background: rgba(0, 0, 0, .18); margin-left: 4px; }
+
+/* banners */
+.banner { border: 1px solid var(--accent-line); background: var(--accent-soft); border-radius: var(--r); padding: 12px 16px; margin-bottom: 18px; }
+.banner.warn { border-color: rgba(255, 183, 77, .4); background: var(--warn-soft); }
+.banner b { display: block; margin-bottom: 2px; }
+
+/* mic meter */
+.meter-box { margin-top: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-2); display: grid; gap: 10px; }
+.meter-top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.meter { position: relative; height: 12px; border-radius: 6px; background: var(--bg); overflow: hidden; }
+.meter-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--faint); transition: width 70ms linear; }
+.meter-fill.speech { background: var(--accent); }
+.meter-mark { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--warn); }
+.meter-legend { display: flex; justify-content: space-between; font-size: 12px; color: var(--faint); }
+.readout { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
+.readout b { color: var(--text); }
+.note { font-size: 13px; color: var(--muted); }
+.warn-text { color: var(--warn); font-size: 13px; }
+
+/* orb preview */
+.split { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 22px; align-items: start; }
+.preview { position: sticky; top: 0; }
+.preview-card { padding: 14px; display: grid; gap: 12px; }
+.segs { display: flex; flex-wrap: wrap; gap: 4px; }
+.seg { border: 1px solid var(--line-2); background: var(--surface-2); color: var(--muted); border-radius: 999px; padding: 3px 11px; font-size: 12.5px; }
+.seg:hover { color: var(--text); }
+.seg.active { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
+.stage {
+  border-radius: 8px; overflow: hidden; display: flex; justify-content: center;
+  background: radial-gradient(120% 90% at 25% 0%, #22405f 0%, #102031 50%, #0a121b 100%);
+}
+.stage canvas { display: block; width: 100%; height: auto; }
+.preview-note { margin: 0; font-size: 13px; color: var(--muted); }
+
+/* toasts & dialog */
+.toasts { position: fixed; right: 20px; bottom: 20px; display: grid; gap: 10px; z-index: 20; justify-items: end; }
+.toast {
+  position: relative; max-width: 440px; padding: 12px 40px 12px 14px; border-radius: 9px; background: var(--surface-3);
+  border: 1px solid var(--line-2); border-left: 3px solid var(--accent); box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+}
+.toast.ok { border-left-color: var(--ok); }
+.toast.error { border-left-color: var(--danger); }
+.toast ul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
+.toast .icon-btn { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; }
+dialog { width: min(920px, 94vw); padding: 0; border: 1px solid var(--line-2); border-radius: 12px; background: var(--surface); color: var(--text); }
+dialog::backdrop { background: rgba(0, 0, 0, .6); }
+.dialog-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.tab { border: 0; background: transparent; color: var(--muted); padding: 6px 10px; border-radius: 7px; font-family: Consolas, monospace; font-size: 13px; }
+.tab.active { background: var(--accent-soft); color: var(--text); }
+.dialog-note { margin: 0; padding: 10px 16px 0; font-size: 13px; color: var(--muted); }
+pre.code { margin: 0; padding: 14px 16px 18px; max-height: 68vh; overflow: auto; font: 12.5px/1.55 Consolas, "Cascadia Mono", monospace; color: #cfe3f2; }
+
+@media (max-width: 1100px) {
+  .split { grid-template-columns: minmax(0, 1fr); }
+  .preview { position: static; order: -1; }
+}
+@media (max-width: 760px) {
+  .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr); }
+  header { flex-wrap: wrap; padding: 10px 16px; height: auto; }
+  nav { flex-direction: row; border-right: 0; border-bottom: 1px solid var(--line); padding: 8px; }
+  .nav-item { width: auto; white-space: nowrap; }
+  .nav-foot { display: none; }
+  .content { padding: 20px 16px 80px; }
+  .slider { grid-template-columns: minmax(0, 1fr); }
+  .rings .row, .browsers .row { --cols: 1fr 1fr !important; }
+  .row.head { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo" aria-hidden="true"></div>
+    <div class="brand">Jarvis <span>settings</span></div>
+    <span class="pill" id="status">Loading…</span>
+    <div class="spacer"></div>
+    <button class="btn ghost" id="discard" type="button">Discard changes</button>
+    <button class="btn primary" id="save" type="button">Save <kbd>Ctrl+S</kbd></button>
+  </header>
+  <nav id="nav" aria-label="Settings sections"></nav>
+  <main id="main"><div class="content" id="content"></div></main>
+</div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script>
+"use strict";
+const TOKEN = "{{TOKEN}}";
+const STATES = ["starting", "sleeping", "listening", "thinking", "speaking", "error"];
+const STATE_INFO = {
+  starting: "Loading its models at launch",
+  sleeping: "Waiting for the wake word",
+  listening: "Recording your command",
+  thinking: "Working out a reply",
+  speaking: "Talking",
+  error: "Something went wrong",
+};
+const SERVER_GONE = "The settings page lost its connection to Jarvis. Start it again with the \"Configure Jarvis\" task.";
+
+// ---------------------------------------------------------------- helpers
+function h(tag, attrs, ...kids) {
+  const e = document.createElement(tag), props = {};
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === "class") e.className = v;
+    else if (k.startsWith("on") && typeof v === "function") e.addEventListener(k.slice(2), v);
+    else if (k === "value" || k === "checked" || k === "html") props[k] = v;
+    else e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const k of kids.flat(Infinity)) if (k != null && k !== false) e.append(k instanceof Node ? k : String(k));
+  if ("html" in props) e.innerHTML = props.html;
+  if ("value" in props) e.value = props.value;
+  if ("checked" in props) e.checked = props.checked;
+  return e;
+}
+const clone = v => v === undefined ? undefined : JSON.parse(JSON.stringify(v));
+const canon = v => JSON.stringify(v, (k, x) => x && typeof x === "object" && !Array.isArray(x)
+  ? Object.fromEntries(Object.keys(x).sort().map(key => [key, x[key]])) : x);
+const same = (a, b) => canon(a) === canon(b);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+const titleCase = s => s.replace(/\b\w/g, c => c.toUpperCase());
+const isHex = s => typeof s === "string" && /^#[0-9a-f]{6}$/i.test(s);
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const DURATION = /^(\d+(\.\d+)?(ms|s|m|h))+$/;
+const snap = (v, step) => {
+  const places = (String(step).split(".")[1] || "").length;
+  return places ? Number(v.toFixed(places)) : v;
+};
+
+async function api(path, body) {
+  let res;
+  try {
+    res = await fetch(path, {
+      method: body === undefined ? "GET" : "POST",
+      headers: { "X-Jarvis-Token": TOKEN, "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch {
+    throw new Error(SERVER_GONE);
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`);
+  return data;
+}
+
+const ICONS = {
+  general: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>',
+  model: '<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/>',
+  listening: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+  commands: '<path d="M4 5h16v11H10l-6 4z"/>',
+  websites: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3.5 3.5 3.5 14.5 0 18M12 3c-3.5 3.5-3.5 14.5 0 18"/>',
+  contacts: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+  orb: '<circle cx="12" cy="12" r="3.5"/><path d="M12 3a9 9 0 0 1 9 9M12 21a9 9 0 0 1-9-9"/>',
+  files: '<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/>',
+  reset: '<path d="M4 12a8 8 0 1 0 2.3-5.7M4 4v4h4"/>',
+  play: '<path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/>',
+  close: '<path d="M6 6l12 12M18 6 6 18"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  code: '<path d="m8 8-4 4 4 4M16 8l4 4-4 4"/>',
+};
+const icon = (name, size = 18) => h("span", {
+  class: "icon",
+  html: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`,
+});
+
+// ---------------------------------------------------------------- choices
+const WHISPER = [
+  { value: "tiny", label: "Tiny", hint: "Fastest, least accurate (about 75 MB)." },
+  { value: "tiny.en", label: "Tiny, English only" },
+  { value: "base", label: "Base", hint: "Fast, fair accuracy (about 145 MB)." },
+  { value: "base.en", label: "Base, English only" },
+  { value: "small", label: "Small", hint: "A good balance of speed and accuracy (about 480 MB)." },
+  { value: "small.en", label: "Small, English only" },
+  { value: "medium", label: "Medium", hint: "More accurate, noticeably slower on a laptop CPU (about 1.5 GB)." },
+  { value: "medium.en", label: "Medium, English only" },
+  { value: "large-v3-turbo", label: "Large v3 Turbo", hint: "The most accurate, slow on a CPU (about 1.6 GB)." },
+].map(o => o.value.endsWith(".en")
+  ? { ...o, hint: "A little more accurate for English, but understands nothing else." } : o);
+const LANGUAGES = [
+  ["en", "English"], ["ro", "Romanian"], ["de", "German"], ["fr", "French"], ["es", "Spanish"],
+  ["it", "Italian"], ["nl", "Dutch"], ["pt", "Portuguese"], ["pl", "Polish"], ["hu", "Hungarian"],
+].map(([value, label]) => ({ value, label }));
+const languageName = code => LANGUAGES.find(o => o.value === code)?.label;
+const languageProblem = code => /^[a-z]{2,3}$/.test(code) ? "" : `"${code}" isn't a language code like en or ro.`;
+const CONTEXT = [
+  { value: 1024, label: "1,024 tokens", hint: "Fastest, but forgets the start of a conversation sooner." },
+  { value: 2048, label: "2,048 tokens", hint: "Lets the 3B model fit on a 4 GB graphics card, which makes replies about 30% faster." },
+  { value: 4096, label: "4,096 tokens", hint: "Remembers more of long conversations; needs more memory." },
+  { value: 8192, label: "8,192 tokens", hint: "For bigger graphics cards and bigger models." },
+];
+const KEEP_ALIVE = [
+  { value: "5m", label: "5 minutes" },
+  { value: "30m", label: "30 minutes" },
+  { value: "1h", label: "1 hour" },
+  { value: -1, label: "As long as Jarvis runs", hint: "Always quick, but the model's memory stays in use." },
+  { value: 0, label: "Unload after every reply", hint: "Frees memory, but every reply waits several seconds for loading." },
+];
+const FONTS = ["Segoe UI", "Bahnschrift", "Calibri", "Arial", "Verdana", "Tahoma", "Consolas"].map(value => ({ value }));
+const SUGGESTED_MODELS = [
+  { value: "llama3.2:3b", hint: "A good all-rounder for a laptop (2 GB)." },
+  { value: "llama3.2:1b", hint: "Very fast, simpler answers (1.3 GB)." },
+  { value: "qwen2.5:3b", hint: "Similar size to Llama 3.2 3B (1.9 GB)." },
+  { value: "llama3.1:8b", hint: "Smarter but slower; wants a strong PC (4.9 GB)." },
+  { value: "qwen2.5:7b", hint: "Smarter but slower; wants a strong PC (4.7 GB)." },
+];
+const SUGGESTED_VOICES = ["en_US-lessac-medium", "en_US-ryan-high", "en_US-amy-medium", "en_GB-alan-medium",
+                          "en_GB-northern_english_male-medium", "ro_RO-mihai-medium"];
+
+const fullModel = m => m.includes(":") ? m : m + ":latest";
+function modelOptions() {
+  const have = info.models || [];
+  return [
+    ...have.map(value => ({ value, group: "Downloaded", hint: SUGGESTED_MODELS.find(s => s.value === value)?.hint })),
+    ...SUGGESTED_MODELS.filter(s => !have.includes(fullModel(s.value)))
+      .map(s => ({ ...s, group: "Not downloaded yet" })),
+  ];
+}
+function modelStatus(v) {
+  if (!v) return null;
+  if (!info.models) return { tone: "warn", text: "Ollama isn't running, so downloaded models can't be checked. Open the Ollama app and reload this page." };
+  if (info.models.includes(fullModel(v))) return { tone: "ok", text: "Downloaded." };
+  return { tone: "warn", text: `Not downloaded yet. After saving, run the Setup task (or "ollama pull ${v}").` };
+}
+const voiceLanguage = v => v.split("-")[0].split("_")[0].toLowerCase();   // "ro" for ro_RO-mihai-medium
+function voiceLabel(v) {
+  const [locale, speaker, quality] = v.split("-");
+  const region = { en_US: "American English", en_GB: "British English" }[locale] || languageName(voiceLanguage(v)) || locale;
+  return speaker && quality ? `${titleCase(speaker.replace(/_/g, " "))} (${region}, ${quality} quality)` : v;
+}
+function voiceOptions() {
+  const have = info.voices || [];
+  return [
+    ...have.map(value => ({ value, label: voiceLabel(value), group: "Downloaded" })),
+    ...SUGGESTED_VOICES.filter(v => !have.includes(v)).map(value => ({ value, label: voiceLabel(value), group: "Not downloaded yet" })),
+  ];
+}
+function voicesStatus(list) {
+  if (!list.length) return null;
+  const missing = list.filter(v => !(info.voices || []).includes(v));
+  const spoken = new Set(list.map(voiceLanguage));
+  const unvoiced = (S.config.languages || []).filter(l => !spoken.has(l)).map(l => languageName(l) || l);
+  const notes = [];
+  if (missing.length) notes.push(`Not downloaded yet: ${missing.join(", ")}. After saving, run the Setup task to download ${missing.length > 1 ? "them" : "it"}.`);
+  if (unvoiced.length) notes.push(`None of these speaks ${unvoiced.join(" or ")}, so Jarvis answers in it with the first voice.`);
+  return notes.length ? { tone: "warn", text: notes.join(" ") } : { tone: "ok", text: "All downloaded." };
+}
+const wakeOptions = () => (info.wake_words || []).map(value => ({ value, label: titleCase(value.replace(/_/g, " ")) }));
+
+// ---------------------------------------------------------------- what's on each page
+const SECTIONS = [
+  { id: "general", title: "General", file: "config", intro: "Who Jarvis is, what it calls you and how it sounds.", cards: [
+    { fields: [
+      { key: "user_name", label: "Your name", type: "text", placeholder: "What should Jarvis call you?",
+        help: "Jarvis uses it when it talks to you. Leave it empty and it won't use a name." },
+      { key: "piper_voices", label: "Voices", type: "picks", options: voiceOptions, status: voicesStatus, required: true,
+        addLabel: "Add a voice…", otherLabel: "Another Piper voice…", otherPlaceholder: "e.g. en_GB-alan-medium, then Enter",
+        empty: "No voices yet.",
+        help: "The Piper voices Jarvis speaks with, one for each language you speak. It answers with the voice for the language you used; the first one also says the greeting and farewell. You can hear them all at rhasspy.github.io/piper-samples." },
+      { key: "greeting", label: "Greeting", type: "text", help: "What Jarvis says when it starts." },
+      { key: "farewell", label: "Farewell", type: "text", help: "What Jarvis says before it shuts down." },
+      { key: "personality", label: "Personality", type: "textarea", rows: 5,
+        help: "Tells the AI model who it is and how to behave. Describe the tone you'd like; the rules about short spoken replies are added automatically." },
+    ] },
+  ] },
+  { id: "model", title: "AI model", file: "config", intro: "The local language model that understands you and writes the replies. It runs in Ollama on this PC.", cards: [
+    { title: "Models", fields: [
+      { key: "model_plugged_in", label: "When plugged in", type: "pick", options: modelOptions, status: modelStatus, required: true,
+        otherLabel: "Another Ollama model…", otherPlaceholder: "e.g. llama3.1:8b",
+        help: "Used while the laptop is charging. Bigger models give better answers but reply more slowly. Pick one that supports tools." },
+      { key: "model_on_battery", label: "On battery", type: "pick", options: modelOptions, status: modelStatus, required: true,
+        otherLabel: "Another Ollama model…", otherPlaceholder: "e.g. llama3.2:1b",
+        help: "A smaller model saves battery and replies faster." },
+    ] },
+    { title: "Behaviour", fields: [
+      { key: "temperature", label: "Creativity", type: "slider", min: 0, max: 2, range: [0, 1.5], step: 0.05, ends: ["Focused", "Creative"],
+        help: "Low values give predictable answers and steadier tool use; high values are more varied but make more mistakes." },
+      { key: "history_turns", label: "Remembered exchanges", type: "number", min: 1, max: 100, step: 1, integer: true, unit: "exchanges",
+        help: "How many of the latest back-and-forths in a conversation Jarvis keeps in mind." },
+      { key: "max_tool_rounds", label: "Tool steps per request", type: "number", min: 1, max: 10, step: 1, integer: true, unit: "steps",
+        help: "How many tools Jarvis may use one after another for a single request, like looking something up and then opening it." },
+    ] },
+    { title: "Performance", fields: [
+      { key: "context_size", label: "Context size", type: "pick", options: CONTEXT, numeric: true, integer: true, min: 256, max: 131072,
+        otherLabel: "Custom…", otherPlaceholder: "tokens, e.g. 3072",
+        help: "How much of the conversation the model can see at once. Raise it if Jarvis forgets things in long conversations." },
+      { key: "keep_alive", label: "Keep the model loaded", type: "pick", options: KEEP_ALIVE, keepAlive: true,
+        otherLabel: "Custom…", otherPlaceholder: "e.g. 2h or 45m",
+        help: "How long the model stays in memory after the last request. Loading it again takes several seconds." },
+    ] },
+  ] },
+  { id: "listening", title: "Listening", file: "config", intro: "How Jarvis wakes up, hears your commands and knows when you've finished talking.", cards: [
+    { title: "Wake word", fields: [
+      { key: "wake_word", label: "Wake word", type: "pick", options: wakeOptions, required: true,
+        otherLabel: "Custom openWakeWord model…", otherPlaceholder: "path to a .onnx model",
+        help: "What you say to wake Jarvis up." },
+      { key: "wake_threshold", label: "Wake sensitivity", type: "slider", min: 0.05, max: 0.99, range: [0.1, 0.95], step: 0.05,
+        ends: ["Wakes easily", "Fewer false wake-ups"],
+        help: "Lower it (0.3) if Jarvis doesn't hear you; raise it (0.7) if it wakes up by accident." },
+    ] },
+    { title: "Understanding speech", fields: [
+      { key: "whisper_model", label: "Speech recognition model", type: "pick", options: WHISPER, required: true,
+        otherLabel: "Another Whisper model…", otherPlaceholder: "e.g. distil-large-v3",
+        help: "Turns what you say into text. A new one downloads by itself the next time Jarvis starts." },
+      { key: "languages", label: "Languages you speak", type: "picks", options: LANGUAGES, check: languageProblem,
+        parse: s => s.trim().toLowerCase(),
+        addLabel: "Add a language…", otherLabel: "Another language…", otherPlaceholder: "two-letter code, e.g. sv, then Enter",
+        empty: "Any language, detected automatically.",
+        help: "Jarvis works out which of these each command is in and answers in the same one. A single language is fastest; more than one (or none, for any language) adds a moment to each command. English-only speech models need English alone." },
+    ] },
+    { title: "Microphone and timing", fields: [
+      { key: "silence_level", label: "Silence level", type: "silence", min: 1, max: 32767, range: [50, 3000], step: 10, integer: true,
+        help: "Sound quieter than this counts as silence. Raise it if Jarvis never stops recording in a noisy room; lower it if it cuts you off." },
+      { key: "silence_seconds", label: "Pause that ends a command", type: "slider", min: 0.1, max: 10, range: [0.3, 4], step: 0.1, unit: "s",
+        help: "How long you stay quiet before Jarvis treats the command as finished. Lower is snappier; raise it if Jarvis cuts you off when you pause mid-sentence." },
+      { key: "no_speech_seconds", label: "Time to start talking", type: "slider", min: 0.5, max: 60, range: [1, 30], step: 0.5, unit: "s",
+        help: "After the wake word, how long Jarvis waits for you to start speaking." },
+      { key: "follow_up_seconds", label: "Follow-up window", type: "slider", min: 0, max: 300, range: [0, 60], step: 0.5, unit: "s",
+        help: "After each reply, how long Jarvis keeps listening for your next command before going back to sleep." },
+      { key: "max_command_seconds", label: "Longest command", type: "slider", min: 1, max: 600, range: [3, 120], step: 1, unit: "s",
+        help: "Recording stops after this long, even if you're still talking." },
+    ] },
+    { title: "Beeps", fields: [
+      { key: "wake_beep", label: "Wake beep", type: "beep", help: "Plays when Jarvis wakes up." },
+      { key: "sleep_beep", label: "Sleep beep", type: "beep", help: "Plays when Jarvis goes back to sleep." },
+      { key: "beep_grace_seconds", label: "Ignore the microphone after the beep", type: "slider", min: 0, max: 5, range: [0, 2], step: 0.05, unit: "s",
+        help: "So the beep's own echo doesn't start a recording." },
+    ] },
+  ] },
+  { id: "commands", title: "Commands", file: "config", intro: "Phrases that control Jarvis itself, and the words that tell it you want something done.", cards: [
+    { fields: [
+      { key: "sleep_phrases", label: "Go back to sleep", type: "chips", placeholder: "Add a phrase…",
+        help: "Saying one of these ends the conversation right away, so Jarvis waits for the wake word again." },
+      { key: "shutdown_phrases", label: "Shut down", type: "chips", placeholder: "Add a phrase…",
+        help: "These stop Jarvis completely. They only count as a short command on its own (5 words or fewer), so \"shut down\" works but a longer sentence containing it doesn't." },
+      { key: "action_words", label: "Action words", type: "chips", placeholder: "Add a word…",
+        help: "Jarvis only offers its tools (opening apps, searching, email…) when your request contains one of these, which keeps small talk fast. Add a word if a request should do something but doesn't." },
+    ] },
+  ] },
+  { id: "websites", title: "Websites & browsers", file: "config", intro: "Shortcuts for the websites you open by voice. Apps need nothing here: Jarvis finds everything in your Start menu.", cards: [
+    { title: "Website shortcuts", fields: [
+      { key: "sites", label: "Websites", type: "map", keyLabel: "Name you say", valueLabel: "Address",
+        keyPlaceholder: "github", valuePlaceholder: "github.com", addLabel: "Add website", empty: "No website shortcuts yet.",
+        checkValue: v => v.trim() ? "" : "enter an address.",
+        help: "Say \"open github\" to open the address without spelling it out." },
+    ] },
+    { title: "Browsers", fields: [
+      { key: "browsers", label: "Browsers", type: "browsers",
+        help: "Browsers Jarvis can open websites and new tabs in when you name one (\"open youtube in firefox\"). Otherwise it uses your default browser." },
+    ] },
+  ] },
+  { id: "contacts", title: "Contacts", file: "config", intro: "People you email, so you can say \"email mom\" instead of spelling out the address.", cards: [
+    { fields: [
+      { key: "contacts", label: "Contacts", type: "map", keyLabel: "Name you say", valueLabel: "Email address",
+        keyPlaceholder: "mom", valuePlaceholder: "mom@example.com", addLabel: "Add contact", empty: "No contacts yet.",
+        checkValue: v => EMAIL.test(v.trim()) ? "" : "that isn't an email address.",
+        help: "Jarvis fills in the email in Gmail; you check it and press Send yourself." },
+    ] },
+  ] },
+  { id: "orb", title: "Orb", file: "ui", wide: true, intro: "The animated orb that floats above the taskbar while Jarvis is awake. Changes show in the preview straight away.", cards: [
+    { title: "Colours and motion", fields: [
+      { keys: ["colors", "spin"], label: "States", type: "states",
+        help: "The orb's colour and how fast its rings spin (degrees per second, negative spins backwards) in each state. Click a state to preview it." },
+      { key: "opacity", label: "Opacity", type: "slider", min: 0.05, max: 1, step: 0.01, ends: ["See-through", "Solid"],
+        help: "How solid the orb is." },
+      { key: "fade_seconds", label: "Fade time", type: "slider", min: 0, max: 10, range: [0, 2], step: 0.01, unit: "s",
+        help: "How long the orb takes to fade in or out." },
+      { key: "bars", label: "Sound bars", type: "slider", min: 0, max: 720, range: [8, 160], step: 1, integer: true,
+        help: "Bars in the sound ring around the core." },
+      { key: "mic_full_scale", label: "Microphone full scale", type: "slider", min: 1, max: 32767, range: [500, 15000], step: 100,
+        help: "How loud the microphone has to be to fill the sound ring. Lower it if the ring barely moves when you talk. Tick \"Use my microphone\" under the preview to try it." },
+      { key: "fps", label: "Frame rate", type: "slider", min: 1, max: 240, range: [10, 144], step: 1, integer: true, unit: "fps",
+        help: "How smooth the animation is. Speeds stay the same; only how fluid the motion looks changes." },
+    ] },
+    { title: "Rings", fields: [
+      { key: "rings", label: "Spinning arcs", type: "rings",
+        help: "The arcs around the orb. Radius and width are in pixels, start and length in degrees; speed multiplies the state's spin, and a negative speed spins backwards. Point at a row to highlight its arc." },
+    ] },
+    { title: "Caption", fields: [
+      { key: "font", label: "Font", type: "pick", options: FONTS, required: true, otherLabel: "Another font…", otherPlaceholder: "any installed font" },
+      { key: "heard_font_size", label: "Size of what you said", type: "number", min: 5, max: 48, step: 1, integer: true, unit: "pt" },
+      { key: "reply_font_size", label: "Size of Jarvis's reply", type: "number", min: 5, max: 48, step: 1, integer: true, unit: "pt" },
+      { key: "heard_color", label: "Colour of what you said", type: "color" },
+      { key: "reply_color", label: "Colour of Jarvis's reply", type: "color" },
+      { key: "panel_color", label: "Caption background", type: "color" },
+    ] },
+    { title: "Size and position", fields: [
+      { key: "width", label: "Width", type: "slider", min: 100, max: 3000, range: [200, 1000], step: 10, integer: true, unit: "px",
+        help: "Size of the overlay window, the dashed box in the preview." },
+      { key: "height", label: "Height", type: "slider", min: 100, max: 3000, range: [200, 1000], step: 10, integer: true, unit: "px" },
+      { key: "orb_y", label: "Orb position", type: "slider", min: 0, max: 3000, range: [40, 600], step: 1, integer: true, unit: "px",
+        help: "Distance from the top of the overlay to the centre of the orb." },
+      { key: "margin", label: "Gap above the taskbar", type: "slider", min: 0, max: 1000, range: [0, 200], step: 1, integer: true, unit: "px" },
+    ] },
+  ] },
+  { id: "files", title: "Files", file: "config", intro: "Where Jarvis keeps things, relative to the project folder.", cards: [
+    { fields: [
+      { key: "memory_file", label: "Memory file", type: "text", required: true,
+        help: "Facts Jarvis remembers about you. Delete the file to wipe them." },
+      { key: "log_dir", label: "Log folder", type: "text", required: true,
+        help: "jarvis.log goes here; it starts fresh on each launch." },
+      { key: "ui_config", label: "Orb settings file", type: "text", required: true,
+        help: "Where the Orb page is saved." },
+    ] },
+  ] },
+];
+const FIELDS = [];
+const KEY_ORDER = { config: [], ui: [] };
+const GROUP = { config: {}, ui: {} };
+for (const sec of SECTIONS) for (const card of sec.cards) for (const f of card.fields) {
+  f.file = sec.file;
+  f.keys = f.keys || [f.key];
+  f.id = f.keys.join("-");
+  f.section = sec.id;
+  FIELDS.push(f);
+  for (const k of f.keys) {
+    KEY_ORDER[f.file].push(k);
+    GROUP[f.file][k] = sec.file === "ui" ? card.title : sec.id;
+  }
+}
+
+// ---------------------------------------------------------------- state
+let S, D, saved, info = {}, paths = {}, notices = [];
+const val = f => f.keys.length > 1 ? f.keys.map(k => S[f.file][k]) : S[f.file][f.key];
+const defVal = f => f.keys.length > 1 ? f.keys.map(k => D[f.file][k]) : D[f.file][f.key];
+const savedVal = f => saved[f.file] && (f.keys.length > 1 ? f.keys.map(k => saved[f.file][k]) : saved[f.file][f.key]);
+function setVal(f, v) {
+  if (f.keys.length > 1) f.keys.forEach((k, i) => { S[f.file][k] = v[i]; });
+  else S[f.file][f.key] = v;
+  changed(f);
+}
+const isDirty = () => !same(S.config, saved.config) || !same(S.ui, saved.ui);
+
+function numProblem(v, f, what = "") {
+  const pre = what ? `${what}: ` : "";
+  if (typeof v !== "number" || !Number.isFinite(v)) return pre + "enter a number.";
+  if (f.integer && !Number.isInteger(v)) return pre + "use a whole number.";
+  if (f.min != null && v < f.min) return `${pre}use ${f.min} or more.`;
+  if (f.max != null && v > f.max) return `${pre}use ${f.max} or less.`;
+  return "";
+}
+const RING_KEYS = [
+  { key: "radius", label: "Radius", min: 1, max: 2000 }, { key: "start", label: "Start", min: -3600, max: 3600 },
+  { key: "length", label: "Length", min: -360, max: 360 }, { key: "width", label: "Width", min: 0, max: 100 },
+  { key: "speed", label: "Speed", min: -100, max: 100 },
+];
+function problem(f) {
+  const v = val(f);
+  const blank = x => !String(x ?? "").trim();
+  switch (f.type) {
+    case "number": case "slider": case "silence":
+      return cap(numProblem(v, f));
+    case "pick":
+      if (f.numeric) return cap(numProblem(v, f));
+      if (f.keepAlive) return typeof v === "number" || DURATION.test(v || "") ? "" : "Use a time like 30m or 2h, or -1 to keep it loaded.";
+      return f.required && blank(v) ? "Required." : "";
+    case "text": case "textarea":
+      return f.required && blank(v) ? "Required." : "";
+    case "color":
+      return isHex(v) ? "" : "Use a colour like #00e5ff.";
+    case "beep":
+      return numProblem(v?.hz, { min: 37, max: 32767, integer: true }, "Pitch")
+          || numProblem(v?.ms, { min: 10, max: 5000, integer: true }, "Length");
+    case "states": {
+      const [colors, spin] = v;
+      for (const s of STATES) {
+        if (!isHex(colors?.[s])) return `${cap(s)}: use a colour like #00e5ff.`;
+        const p = numProblem(spin?.[s], { min: -3600, max: 3600 }, `${cap(s)} speed`);
+        if (p) return p;
+      }
+      return "";
+    }
+    case "rings":
+      for (const [i, ring] of (v || []).entries())
+        for (const k of RING_KEYS) { const p = numProblem(ring[k.key], k, `Ring ${i + 1} ${k.label.toLowerCase()}`); if (p) return p; }
+      return "";
+    case "picks":
+      if (f.required && !(v || []).length) return "Choose at least one.";
+      for (const x of v || []) { const p = f.check?.(x); if (p) return p; }
+      return "";
+    case "map":
+      for (const [k, x] of Object.entries(v || {})) { const p = f.checkValue?.(x); if (p) return `"${k}": ${p}`; }
+      return "";
+    case "browsers":
+      for (const [k, b] of Object.entries(v || {})) {
+        if (blank(b.command)) return `"${k}": enter the program to run.`;
+        if (blank(b.new_tab)) return `"${k}": enter its new-tab page.`;
+      }
+      return "";
+  }
+  return "";
+}
+
+// ---------------------------------------------------------------- the files, as they'll be written
+const WIDTH = 100;
+function inline(v) {
+  if (Array.isArray(v)) return "[" + v.map(inline).join(", ") + "]";
+  if (v && typeof v === "object") {
+    const e = Object.entries(v);
+    return e.length ? "{ " + e.map(([k, x]) => JSON.stringify(k) + ": " + inline(x)).join(", ") + " }" : "{}";
+  }
+  return JSON.stringify(v);
+}
+function block(v, ind, used) {
+  const flat = inline(v);
+  if (v === null || typeof v !== "object" || used + flat.length < WIDTH) return flat;
+  const next = ind + "  ";
+  if (Array.isArray(v)) {
+    if (v.every(x => x === null || typeof x !== "object")) {   // words wrap like text
+      const lines = [""];
+      for (const x of v.map(x => JSON.stringify(x))) {
+        const cur = lines[lines.length - 1];
+        if (cur && next.length + cur.length + x.length + 2 > WIDTH) { lines[lines.length - 1] += ","; lines.push(x); }
+        else lines[lines.length - 1] = cur ? `${cur}, ${x}` : x;
+      }
+      return "[\n" + lines.map(l => next + l).join("\n") + "\n" + ind + "]";
+    }
+    return "[\n" + v.map(x => next + block(x, next, next.length)).join(",\n") + "\n" + ind + "]";
+  }
+  return "{\n" + Object.entries(v).map(([k, x]) => {
+    const key = JSON.stringify(k) + ": ";
+    return next + key + block(x, next, next.length + key.length);
+  }).join(",\n") + "\n" + ind + "}";
+}
+function formatJson(obj, file) {
+  const order = KEY_ORDER[file];
+  const keys = [...order.filter(k => k in obj), ...Object.keys(obj).filter(k => !order.includes(k))];
+  const lines = [];
+  let prev = null;
+  keys.forEach((k, i) => {
+    const group = GROUP[file][k] ?? "other";
+    if (prev !== null && group !== prev) lines.push("");
+    prev = group;
+    const key = `  ${JSON.stringify(k)}: `;
+    lines.push(key + block(obj[k], "  ", key.length) + (i < keys.length - 1 ? "," : ""));
+  });
+  return "{\n" + lines.join("\n") + "\n}\n";
+}
+
+// ---------------------------------------------------------------- controls
+function numberBox(value, opts, onInput, id) {
+  const input = h("input", { type: "number", id, value: value ?? "", step: opts.step ?? "any", inputmode: "decimal",
+                             "aria-label": opts.aria });
+  input.addEventListener("input", () => onInput(input.value === "" ? null : Number(input.value)));
+  return { el: h("span", { class: "num" }, input, opts.unit && h("span", { class: "unit" }, opts.unit)), input };
+}
+function colorInput(value, onInput, id) {
+  const swatch = h("input", { type: "color", value: isHex(value) ? value.toLowerCase() : "#000000", "aria-label": "Pick a colour" });
+  const text = h("input", { type: "text", id, class: "hex", value: value ?? "", maxlength: 7, spellcheck: "false" });
+  swatch.addEventListener("input", () => { text.value = swatch.value; onInput(swatch.value); });
+  text.addEventListener("input", () => {
+    const t = text.value.trim();
+    if (isHex(t)) swatch.value = t.toLowerCase();
+    onInput(t);
+  });
+  return h("span", { class: "color" }, swatch, text);
+}
+function hintView(hint, status) {
+  return [hint && h("span", {}, hint + " "), status && h("span", { class: status.tone }, status.text)];
+}
+
+const CONTROLS = {
+  text(f) {
+    const i = h("input", { type: "text", id: f.id, value: val(f) ?? "", placeholder: f.placeholder, spellcheck: "false", autocomplete: "off" });
+    i.addEventListener("input", () => setVal(f, i.value));
+    return i;
+  },
+  textarea(f) {
+    const t = h("textarea", { id: f.id, rows: f.rows || 4, value: val(f) ?? "" });
+    t.addEventListener("input", () => setVal(f, t.value));
+    return t;
+  },
+  number(f) {
+    return numberBox(val(f), f, v => setVal(f, v), f.id).el;
+  },
+  slider(f) {
+    const [lo, hi] = f.range || [f.min, f.max];
+    const range = h("input", { type: "range", min: lo, max: hi, step: f.step, value: val(f) ?? lo, "aria-label": f.label });
+    const box = numberBox(val(f), f, v => { if (v != null) range.value = v; setVal(f, v); }, f.id);
+    range.addEventListener("input", () => {
+      const v = snap(Number(range.value), f.step);
+      box.input.value = v;
+      setVal(f, v);
+    });
+    f.show = v => { range.value = v; box.input.value = v; };
+    return h("div", { class: "slider" },
+      h("div", {}, range, f.ends && h("div", { class: "ends" }, h("span", {}, f.ends[0]), h("span", {}, f.ends[1]))),
+      box.el);
+  },
+  silence(f) {
+    return h("div", {}, CONTROLS.slider(f), micMeter(f));
+  },
+  pick(f) {
+    const opts = typeof f.options === "function" ? f.options() : f.options;
+    const select = h("select", { id: f.id });
+    const groups = new Map();
+    opts.forEach((o, i) => {
+      const option = h("option", { value: String(i) }, o.label ?? String(o.value));
+      if (!o.group) return select.append(option);
+      if (!groups.has(o.group)) select.append(groups.set(o.group, h("optgroup", { label: o.group })).get(o.group));
+      groups.get(o.group).append(option);
+    });
+    select.append(h("option", { value: "other" }, f.otherLabel || "Other…"));
+    const other = h("input", { type: "text", class: "other", placeholder: f.otherPlaceholder, spellcheck: "false", "aria-label": f.label });
+    const hint = h("div", { class: "hint" });
+    const parse = s => {
+      s = s.trim();
+      if (f.numeric) return s === "" ? null : Number(s);
+      if (f.keepAlive && /^-?\d+(\.\d+)?$/.test(s)) return Number(s);
+      return s;
+    };
+    const show = () => {
+      other.hidden = select.value !== "other";
+      const o = opts[Number(select.value)];
+      hint.replaceChildren(...hintView(select.value === "other" ? "" : o?.hint, f.status?.(val(f))).filter(Boolean));
+    };
+    const index = opts.findIndex(o => same(o.value, val(f)));
+    select.value = index >= 0 ? String(index) : "other";
+    if (index < 0) other.value = String(val(f) ?? "");
+    select.addEventListener("change", () => {
+      if (select.value === "other") {
+        if (!other.value) other.value = String(val(f) ?? "");
+        setVal(f, parse(other.value));
+        show();
+        other.focus();
+        other.select();
+      } else {
+        setVal(f, clone(opts[Number(select.value)].value));
+        show();
+      }
+    });
+    other.addEventListener("input", () => { setVal(f, parse(other.value)); show(); });
+    show();
+    return h("div", { class: "pick" }, h("div", { class: "pick-row" }, select, other), hint);
+  },
+  chips(f) {
+    const box = h("div", { class: "chips" });
+    const input = h("input", { type: "text", id: f.id, placeholder: f.placeholder || "Add…", spellcheck: "false", autocomplete: "off" });
+    const draw = () => box.replaceChildren(...val(f).map((w, i) => h("span", { class: "chip" }, w,
+      h("button", { type: "button", title: `Remove "${w}"`, "aria-label": `Remove ${w}`, onclick: () => {
+        const list = val(f).slice();
+        list.splice(i, 1);
+        setVal(f, list);
+        draw();
+        input.focus();
+      } }, "×"))), input);
+    const add = refocus => {
+      const list = val(f).slice();
+      for (const p of input.value.split(",").map(s => s.trim().toLowerCase()).filter(Boolean))
+        if (!list.includes(p)) list.push(p);
+      input.value = "";
+      setVal(f, list);
+      draw();
+      if (refocus) input.focus();
+    };
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === ",") { e.preventDefault(); add(true); }
+      else if (e.key === "Backspace" && !input.value && val(f).length) { setVal(f, val(f).slice(0, -1)); draw(); input.focus(); }
+    });
+    input.addEventListener("blur", () => { if (input.value.trim()) add(false); });
+    box.addEventListener("click", e => { if (e.target === box) input.focus(); });
+    draw();
+    return box;
+  },
+  picks(f) {
+    // the chosen values as chips, in order, and a list to add another one from
+    const opts = typeof f.options === "function" ? f.options() : f.options;
+    const label = v => opts.find(o => same(o.value, v))?.label ?? String(v);
+    const list = () => val(f) || [];
+    const chips = h("div", { class: "chips fixed" });
+    const select = h("select", { id: f.id });
+    const other = h("input", { type: "text", class: "other", hidden: true, placeholder: f.otherPlaceholder, spellcheck: "false", "aria-label": f.otherLabel });
+    const hint = h("div", { class: "hint" });
+    const add = v => {
+      if (v && !list().some(x => same(x, v))) setVal(f, [...list(), v]);
+      draw();
+    };
+    const draw = () => {
+      chips.replaceChildren(...(list().length ? list().map((v, i) => h("span", { class: "chip" }, label(v),
+        h("button", { type: "button", title: `Remove ${label(v)}`, "aria-label": `Remove ${label(v)}`, onclick: () => {
+          setVal(f, list().filter((_, j) => j !== i));
+          draw();
+        } }, "×"))) : [h("span", { class: "empty" }, f.empty)]));
+      const groups = new Map();
+      select.replaceChildren(h("option", { value: "" }, f.addLabel));
+      opts.forEach((o, i) => {
+        if (list().some(x => same(x, o.value))) return;
+        const option = h("option", { value: String(i) }, o.label ?? String(o.value));
+        if (!o.group) return select.append(option);
+        if (!groups.has(o.group)) select.append(groups.set(o.group, h("optgroup", { label: o.group })).get(o.group));
+        groups.get(o.group).append(option);
+      });
+      select.append(h("option", { value: "other" }, f.otherLabel));
+      select.value = other.hidden ? "" : "other";
+      hint.replaceChildren(...hintView("", f.status?.(list())).filter(Boolean));
+    };
+    const addOther = () => {
+      const v = f.parse ? f.parse(other.value) : other.value.trim();
+      other.value = "";
+      other.hidden = true;
+      add(v);
+    };
+    select.addEventListener("change", () => {
+      other.hidden = select.value !== "other";
+      if (select.value === "other") other.focus();
+      else if (select.value !== "") add(clone(opts[Number(select.value)].value));
+    });
+    other.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addOther(); } });
+    other.addEventListener("blur", () => { if (other.value.trim()) addOther(); });
+    draw();
+    return h("div", { class: "picks" }, chips, h("div", { class: "pick-row" }, select, other), hint);
+  },
+  map(f) {
+    const rows = Object.entries(val(f) || {}).map(([k, v]) => ({ k, v }));
+    const list = h("div", { class: "rows" });
+    const mark = () => {
+      const seen = new Set();
+      for (const r of rows) {
+        const key = r.k.trim().toLowerCase();
+        const dup = !!key && seen.has(key);
+        seen.add(key);
+        r.keyEl.classList.toggle("bad", dup || (!key && !!r.v.trim()));
+        r.keyEl.title = dup ? "This name is already used above" : "";
+        r.valEl.classList.toggle("bad", !!key && !!f.checkValue?.(r.v));
+      }
+    };
+    const commit = () => {
+      const obj = {};
+      for (const r of rows) if (r.k.trim()) obj[r.k.trim()] = r.v.trim();
+      setVal(f, obj);
+      mark();
+    };
+    const draw = () => {
+      list.replaceChildren(
+        rows.length ? h("div", { class: "row head" }, h("span", {}, f.keyLabel), h("span", {}, f.valueLabel), h("span"))
+                    : h("p", { class: "empty" }, f.empty),
+        ...rows.map((r, i) => {
+          r.keyEl = h("input", { type: "text", value: r.k, placeholder: f.keyPlaceholder, spellcheck: "false", "aria-label": f.keyLabel });
+          r.valEl = h("input", { type: "text", value: r.v, placeholder: f.valuePlaceholder, spellcheck: "false", "aria-label": f.valueLabel });
+          r.keyEl.addEventListener("input", () => { r.k = r.keyEl.value; commit(); });
+          r.valEl.addEventListener("input", () => { r.v = r.valEl.value; commit(); });
+          return h("div", { class: "row" }, r.keyEl, r.valEl,
+            h("button", { type: "button", class: "icon-btn", title: "Remove", "aria-label": "Remove", onclick: () => {
+              rows.splice(i, 1);
+              commit();
+              draw();
+            } }, icon("close", 15)));
+        }));
+      mark();
+    };
+    const add = h("button", { type: "button", class: "btn small add", onclick: () => {
+      rows.push({ k: "", v: "" });
+      draw();
+      rows[rows.length - 1].keyEl.focus();
+    } }, icon("plus", 15), f.addLabel);
+    draw();
+    return h("div", { class: "table", style: "--cols: minmax(0, 1fr) minmax(0, 1.6fr) 32px" }, list, add);
+  },
+  browsers(f) {
+    const rows = Object.entries(val(f) || {}).map(([name, b]) => ({ name, command: b.command ?? "", args: (b.args || []).join(" "), new_tab: b.new_tab ?? "" }));
+    const list = h("div", { class: "rows" });
+    const COLS = [["name", "Name you say", "firefox"], ["command", "Program", "firefox"],
+                  ["args", "Flags before the address", "-new-tab"], ["new_tab", "Blank new-tab page", "about:newtab"]];
+    const commit = () => {
+      const obj = {};
+      for (const r of rows) if (r.name.trim())
+        obj[r.name.trim()] = { command: r.command.trim(), args: r.args.split(/\s+/).filter(Boolean), new_tab: r.new_tab.trim() };
+      setVal(f, obj);
+    };
+    const draw = () => list.replaceChildren(
+      rows.length ? h("div", { class: "row head" }, COLS.map(c => h("span", {}, c[1])), h("span"))
+                  : h("p", { class: "empty" }, "No browsers. Jarvis will always use your default browser."),
+      ...rows.map((r, i) => h("div", { class: "row" },
+        COLS.map(([key, label, placeholder]) => {
+          const input = h("input", { type: "text", value: r[key], placeholder, spellcheck: "false", "aria-label": label });
+          input.addEventListener("input", () => { r[key] = input.value; commit(); });
+          return input;
+        }),
+        h("button", { type: "button", class: "icon-btn", title: "Remove", "aria-label": "Remove", onclick: () => {
+          rows.splice(i, 1);
+          commit();
+          draw();
+        } }, icon("close", 15)))));
+    const add = h("button", { type: "button", class: "btn small add", onclick: () => {
+      rows.push({ name: "", command: "", args: "", new_tab: "" });
+      draw();
+      list.querySelector(".row:last-child input")?.focus();
+    } }, icon("plus", 15), "Add browser");
+    draw();
+    return h("div", { class: "table browsers", style: "--cols: minmax(0, .8fr) minmax(0, .9fr) minmax(0, 1fr) minmax(0, 1.1fr) 32px" }, list, add);
+  },
+  rings(f) {
+    const list = h("div", { class: "rows" });
+    const draw = () => list.replaceChildren(
+      h("div", { class: "row head" }, RING_KEYS.map(k => h("span", {}, k.label)), h("span")),
+      ...(val(f) || []).map((ring, i) => {
+        const row = h("div", { class: "row" },
+          RING_KEYS.map(k => numberBox(ring[k.key], { step: k.key === "speed" ? 0.1 : 1, aria: `Ring ${i + 1} ${k.label}` }, v => {
+            const rings = clone(val(f));
+            rings[i][k.key] = v;
+            setVal(f, rings);
+          }).input),
+          h("button", { type: "button", class: "icon-btn", title: "Remove this ring", "aria-label": "Remove this ring", onclick: () => {
+            const rings = clone(val(f));
+            rings.splice(i, 1);
+            setVal(f, rings);
+            if (preview) preview.highlight = -1;
+            draw();
+          } }, icon("close", 15)));
+        const on = () => { if (preview) preview.highlight = i; };
+        const off = () => { if (preview) preview.highlight = -1; };
+        row.addEventListener("mouseenter", on);
+        row.addEventListener("focusin", on);
+        row.addEventListener("mouseleave", off);
+        row.addEventListener("focusout", off);
+        return row;
+      }));
+    const add = h("button", { type: "button", class: "btn small add", onclick: () => {
+      const rings = clone(val(f) || []);
+      const outer = Math.max(90, ...rings.map(r => Number(r.radius) || 0));
+      rings.push({ radius: outer + 8, start: 0, length: 60, width: 1, speed: 1 });
+      setVal(f, rings);
+      draw();
+    } }, icon("plus", 15), "Add ring");
+    draw();
+    return h("div", { class: "table rings", style: "--cols: repeat(5, minmax(0, 1fr)) 32px" }, list, add);
+  },
+  beep(f) {
+    const cur = () => val(f) || {};
+    const hz = numberBox(cur().hz, { step: 10, unit: "Hz", aria: "Pitch" }, v => setVal(f, { ...cur(), hz: v }), f.id);
+    const ms = numberBox(cur().ms, { step: 10, unit: "ms", aria: "Length" }, v => setVal(f, { ...cur(), ms: v }));
+    const play = h("button", { type: "button", class: "btn small" }, icon("play", 13), "Play");
+    play.addEventListener("click", async () => {
+      if (problem(f)) return;
+      play.disabled = true;
+      try { await api("/api/beep", cur()); } catch (e) { toast(e.message, "error"); }
+      play.disabled = false;
+    });
+    return h("div", { class: "inline" }, hz.el, ms.el, play);
+  },
+  color(f) {
+    return colorInput(val(f), v => setVal(f, v), f.id);
+  },
+  states(f) {
+    const rows = STATES.map(s => h("div", { class: "row state-row", "data-state": s },
+      h("button", { type: "button", class: "state-name", onclick: () => preview?.setState(s) }, h("b", {}, cap(s)), h("small", {}, STATE_INFO[s])),
+      colorInput(S.ui.colors?.[s], v => { S.ui.colors = { ...S.ui.colors, [s]: v }; changed(f); }),
+      numberBox(S.ui.spin?.[s], { step: 1, unit: "°/s", aria: `${cap(s)} ring speed` }, v => { S.ui.spin = { ...S.ui.spin, [s]: v }; changed(f); }).el));
+    return h("div", { class: "table states" },
+      h("div", { class: "row head" }, h("span", {}, "State"), h("span", {}, "Colour"), h("span", {}, "Ring speed")), rows);
+  },
+};
+
+// ---------------------------------------------------------------- microphone
+const mic = {
+  on: false, level: 0, error: "", listeners: new Set(),
+  async start() {
+    if (this.on) return;
+    this.on = true;
+    this.error = "";
+    while (this.on) {
+      try {
+        this.level = (await api("/api/mic")).level;
+      } catch (e) {
+        this.error = e.message;
+        this.on = false;
+        this.level = 0;
+      }
+      this.listeners.forEach(fn => fn());
+      await sleep(60);
+    }
+  },
+  stop() {
+    this.on = false;
+    this.level = 0;
+    this.listeners.forEach(fn => fn());
+  },
+};
+
+function micMeter(f) {
+  const fill = h("div", { class: "meter-fill" });
+  const markEl = h("div", { class: "meter-mark", title: "Silence level" });
+  const readout = h("span", { class: "readout" });
+  const toggle = h("button", { type: "button", class: "btn small" });
+  const measure = h("button", { type: "button", class: "btn small" }, "Measure room noise");
+  const note = h("div", { class: "note" }, "Start the test and talk: the bar should turn blue when you speak and grey when you're quiet. Or stay quiet and measure the room noise to get a suggested level.");
+  const scale = () => Math.max(3000, (val(f) || 0) * 1.25);
+  let samples = null;
+  const draw = () => {
+    const level = mic.level, threshold = val(f) || 0;
+    fill.style.width = `${Math.min(100, level / scale() * 100)}%`;
+    fill.classList.toggle("speech", level > threshold);
+    markEl.style.left = `calc(${Math.min(100, threshold / scale() * 100)}% - 1px)`;
+    toggle.replaceChildren(icon("listening", 15), mic.on ? "Stop test" : "Test microphone");
+    readout.replaceChildren(...(mic.error ? [h("span", { class: "warn-text" }, mic.error)]
+      : mic.on ? ["Level ", h("b", {}, String(Math.round(level))), level > threshold ? " · speech" : " · silence"]
+      : ["Microphone off"]));
+    if (samples && mic.on) samples.push(level);
+  };
+  toggle.addEventListener("click", () => mic.on ? mic.stop() : mic.start());
+  measure.addEventListener("click", async () => {
+    measure.disabled = true;
+    const started = !mic.on;
+    if (started) mic.start();
+    samples = [];
+    for (let s = 3; s > 0; s--) {
+      note.textContent = `Stay quiet… ${s}`;
+      await sleep(1000);
+    }
+    const peak = Math.max(0, ...samples);
+    samples = null;
+    if (started) mic.stop();
+    measure.disabled = false;
+    if (mic.error) { note.textContent = mic.error; return; }
+    const suggestion = Math.max(100, Math.ceil(Math.max(peak * 1.4, peak + 100) / 10) * 10);
+    note.replaceChildren(`Room noise peaked at ${Math.round(peak)}. A silence level of ${suggestion} sits safely above it. `,
+      h("button", { type: "button", class: "btn small", onclick: () => { setVal(f, suggestion); f.show(suggestion); draw(); } }, `Use ${suggestion}`));
+  });
+  mic.listeners.add(draw);
+  f.redraw = draw;
+  draw();
+  return h("div", { class: "meter-box" },
+    h("div", { class: "meter-top" }, toggle, measure, readout),
+    h("div", {}, h("div", { class: "meter" }, fill, markEl),
+      h("div", { class: "meter-legend" }, h("span", {}, "0"), h("span", {}, "▲ marks the silence level"), h("span", {}, String(Math.round(scale()))))),
+    note);
+}
+
+// ---------------------------------------------------------------- orb preview, drawn like jarvis/ui/hud.py
+const BASE_FPS = 30, CAPTION_GAP = 17, PAD_X = 36, PAD_TOP = 14, TASKBAR = 34;
+const WHITE = [255, 255, 255];
+const SAMPLES = {
+  starting: ["", "Starting up..."],
+  sleeping: ["How's my battery?", "You're at 82 percent and charging, so no rush."],
+  listening: ["Listening...", ""],
+  thinking: ["Open Spotify and play something relaxing", ""],
+  speaking: ["How's my battery?", "You're at 82 percent and charging, so no rush."],
+  error: ["Something went wrong (see logs/jarvis.log)", "Can't reach Ollama."],
+};
+const rgbOf = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
+const hexOf = rgb => "#" + rgb.map(v => Math.round(v).toString(16).padStart(2, "0")).join("");
+const mixOf = (a, b, t) => hexOf(a.map((x, i) => x + (b[i] - x) * t));
+const clip = (text, n) => text.length <= n ? text : text.slice(0, n - 1).trimEnd() + "…";
+
+class OrbPreview {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext("2d");
+    this.state = "listening";
+    this.rgb = null;
+    this.level = 0;
+    this.angle = 0;
+    this.frame = 0;
+    this.noise = [];
+    this.useMic = false;
+    this.highlight = -1;
+    this.timer = null;
+  }
+  n(key) { return Number.isFinite(S.ui[key]) ? S.ui[key] : D.ui[key]; }
+  setState(s) { this.state = s; this.onState?.(s); }
+  start() {
+    const loop = () => {
+      this.draw();
+      this.timer = setTimeout(loop, 1000 / Math.min(240, Math.max(1, this.n("fps"))));
+    };
+    loop();
+  }
+  stop() { clearTimeout(this.timer); }
+  resize(W, H) {
+    const dpr = window.devicePixelRatio || 1;
+    if (this.W === W && this.H === H && this.dpr === dpr) return;
+    Object.assign(this, { W, H, dpr });
+    this.canvas.width = Math.round(W * dpr);
+    this.canvas.height = Math.round(H * dpr);
+    this.canvas.style.maxWidth = `${W}px`;
+  }
+  micLoudness(sec) {
+    if (this.useMic) return mic.level;
+    const talking = sec % 4 < 2.6;
+    const syllable = Math.max(0, Math.sin(sec * Math.PI * 2 * 3.3)) ** 0.7;
+    return 120 + (talking ? syllable * (1800 + 900 * Math.sin(sec * 1.7)) : 0) + Math.random() * 60;
+  }
+  voiceLevel(sec) {
+    const talking = sec % 3.2 < 2.5;
+    return talking ? Math.max(0, Math.sin(sec * Math.PI * 2 * 3.8)) ** 0.6 * (0.75 + 0.25 * Math.sin(sec * 2.3)) : 0.02;
+  }
+  draw() {
+    const w = Math.max(50, this.n("width")), height = Math.max(50, this.n("height")), fps = Math.max(1, this.n("fps"));
+    const margin = Math.max(0, this.n("margin"));
+    this.resize(w + 2 * PAD_X, PAD_TOP + height + margin + TASKBAR);
+    const ctx = this.ctx, state = this.state;
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.clearRect(0, 0, this.W, this.H);
+
+    // the taskbar and the overlay's outline, for scale
+    ctx.fillStyle = "rgba(12, 17, 24, .92)";
+    ctx.fillRect(0, this.H - TASKBAR, this.W, TASKBAR);
+    ctx.fillStyle = "rgba(255, 255, 255, .16)";
+    for (let i = -2; i <= 2; i++) ctx.fillRect(this.W / 2 + i * 26 - 8, this.H - TASKBAR / 2 - 8, 16, 16);
+    ctx.save();
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = "rgba(255, 255, 255, .18)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(PAD_X + 0.5, PAD_TOP + 0.5, w - 1, height - 1);
+    ctx.restore();
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(PAD_X, PAD_TOP, w, height);
+    ctx.clip();
+    ctx.translate(PAD_X, PAD_TOP);
+    ctx.globalAlpha = Math.min(1, Math.max(0, this.n("opacity"))) * (state === "sleeping" ? 0.4 : 1);
+
+    this.frame++;
+    const t = this.frame * BASE_FPS / fps, sec = t / BASE_FPS;
+    const ease = k => 1 - (1 - k) ** (BASE_FPS / fps);
+    const colorFor = s => isHex(S.ui.colors?.[s]) ? S.ui.colors[s] : D.ui.colors[s];
+    const target = rgbOf(colorFor(state));
+    this.rgb = this.rgb ? this.rgb.map((a, i) => a + (target[i] - a) * ease(0.12)) : target;
+    const color = hexOf(this.rgb);
+
+    let goal;
+    if (state === "listening") goal = Math.min(1, this.micLoudness(sec) / Math.max(1, this.n("mic_full_scale")));
+    else if (state === "speaking") goal = this.voiceLevel(sec);
+    else if (state === "thinking" || state === "starting") goal = 0.3 + 0.1 * Math.sin(t * 0.3);
+    else goal = 0.1 + 0.08 * Math.sin(t * 0.06);
+    this.level += (goal - this.level) * ease(0.3);
+    const lv = this.level, m = w / 2, y = this.n("orb_y");
+
+    const coreR = 28 + 18 * lv;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(m, y, coreR + 5, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const bars = Math.max(0, Math.round(this.n("bars")));
+    if (this.noise.length !== bars) this.noise = new Array(bars).fill(0);
+    const inner = coreR + 11, nk = ease(0.35);
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    for (let i = 0; i < bars; i++) {
+      const a = 2 * Math.PI * i / bars + this.angle * Math.PI / 180 * 0.3;
+      let length;
+      if (state === "listening" || state === "speaking") {
+        this.noise[i] += (Math.random() - this.noise[i]) * nk;
+        length = 3 + 32 * lv * this.noise[i];
+      } else if (state === "thinking" || state === "starting") {
+        length = 3 + 5 * (1 + Math.sin(i * 6 * Math.PI / bars - t * 0.25));
+      } else {
+        length = 2;
+      }
+      const cos = Math.cos(a), sin = Math.sin(a);
+      ctx.moveTo(m + inner * cos, y + inner * sin);
+      ctx.lineTo(m + (inner + length) * cos, y + (inner + length) * sin);
+    }
+    ctx.stroke();
+    ctx.lineCap = "butt";
+
+    const spin = Number.isFinite(S.ui.spin?.[state]) ? S.ui.spin[state] : D.ui.spin[state];
+    this.angle += spin / fps;
+    const rings = Array.isArray(S.ui.rings) ? S.ui.rings : [];
+    rings.forEach((r, i) => {
+      if (![r.radius, r.start, r.length, r.width, r.speed].every(Number.isFinite) || r.radius <= 0 || r.width <= 0) return;
+      const start = (((r.start + this.angle * r.speed) % 360) + 360) % 360;
+      const a = -start * Math.PI / 180, b = -(start + r.length) * Math.PI / 180;
+      ctx.lineWidth = r.width;
+      ctx.strokeStyle = i === this.highlight ? "#ffffff" : color;
+      ctx.shadowColor = i === this.highlight ? "#ffffff" : "transparent";
+      ctx.shadowBlur = i === this.highlight ? 8 : 0;
+      ctx.beginPath();
+      ctx.arc(m, y, r.radius, Math.min(a, b), Math.max(a, b));
+      ctx.stroke();
+    });
+    ctx.shadowBlur = 0;
+
+    ctx.beginPath();
+    ctx.arc(m, y, coreR, 0, Math.PI * 2);
+    ctx.fillStyle = mixOf(this.rgb, WHITE, 0.25 + 0.5 * lv);
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+
+    let outer = Math.max(...rings.map(r => r.radius).filter(Number.isFinite));
+    if (!Number.isFinite(outer)) outer = 95;
+    this.drawCaption(ctx, w, y + outer + CAPTION_GAP, colorFor("error"));
+    ctx.restore();
+  }
+  wrap(ctx, text, maxWidth) {
+    const lines = [];
+    let line = "";
+    for (const word of text.split(" ")) {
+      const next = line ? `${line} ${word}` : word;
+      if (line && ctx.measureText(next).width > maxWidth) { lines.push(line); line = word; }
+      else line = next;
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+  drawCaption(ctx, w, top, errorColor) {
+    const [you, reply] = SAMPLES[this.state];
+    const family = `"${S.ui.font || "Segoe UI"}", "Segoe UI", sans-serif`;
+    const parts = [
+      [clip(you, 90), this.n("heard_font_size"), isHex(S.ui.heard_color) ? S.ui.heard_color : D.ui.heard_color],
+      [clip(reply, 160), this.n("reply_font_size"), this.state === "error" ? errorColor : isHex(S.ui.reply_color) ? S.ui.reply_color : D.ui.reply_color],
+    ].filter(p => p[0]);
+    if (!parts.length) return;
+    let y = top, widest = 0;
+    const laid = parts.map(([text, pt, color], i) => {
+      const px = pt * 96 / 72, lineH = Math.round(px * 1.33);
+      ctx.font = `${px}px ${family}`;
+      const lines = this.wrap(ctx, text, w - 48);
+      widest = Math.max(widest, ...lines.map(l => ctx.measureText(l).width));
+      if (i > 0) y += 4;
+      const at = y;
+      y += lines.length * lineH;
+      return { lines, px, lineH, color, at };
+    });
+    const x1 = w / 2 - widest / 2 - 14, x2 = w / 2 + widest / 2 + 14, y1 = top - 10, y2 = y + 10, r = 14;
+    ctx.fillStyle = isHex(S.ui.panel_color) ? S.ui.panel_color : D.ui.panel_color;
+    ctx.beginPath();
+    ctx.roundRect(x1, y1, x2 - x1, y2 - y1, r);
+    ctx.fill();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    for (const p of laid) {
+      ctx.font = `${p.px}px ${family}`;
+      ctx.fillStyle = p.color;
+      p.lines.forEach((l, i) => ctx.fillText(l, w / 2, p.at + i * p.lineH));
+    }
+  }
+}
+let preview = null;
+
+function previewAside() {
+  const canvas = h("canvas", { role: "img", "aria-label": "Live preview of the orb" });
+  preview = new OrbPreview(canvas);
+  const buttons = STATES.map(s => h("button", { type: "button", class: "seg", "data-state": s, onclick: () => preview.setState(s) }, cap(s)));
+  const note = h("p", { class: "preview-note" });
+  const useMic = h("input", { type: "checkbox" });
+  const micNote = h("span", { class: "warn-text" });
+  useMic.addEventListener("change", () => {
+    preview.useMic = useMic.checked;
+    if (useMic.checked) { preview.setState("listening"); mic.start(); } else mic.stop();
+  });
+  mic.listeners.add(() => {
+    micNote.textContent = mic.error;
+    if (!mic.on && useMic.checked) { useMic.checked = false; preview.useMic = false; }
+  });
+  preview.onState = s => {
+    buttons.forEach(b => b.classList.toggle("active", b.dataset.state === s));
+    document.querySelectorAll(".state-row").forEach(r => r.classList.toggle("active", r.dataset.state === s));
+    note.textContent = s === "sleeping" ? "Sleeping: in Jarvis the orb fades out completely; it's dimmed here so you can see its colour."
+                                        : `${cap(s)}: ${STATE_INFO[s].toLowerCase()}.`;
+  };
+  return h("aside", { class: "preview" }, h("div", { class: "card preview-card" },
+    h("div", { class: "segs" }, buttons),
+    h("div", { class: "stage" }, canvas),
+    note,
+    h("label", { class: "check" }, useMic, "Use my microphone for Listening"),
+    micNote));
+}
+
+// ---------------------------------------------------------------- page
+const nav = document.getElementById("nav");
+const main = document.getElementById("main");
+const content = document.getElementById("content");
+const statusPill = document.getElementById("status");
+const saveBtn = document.getElementById("save");
+const discardBtn = document.getElementById("discard");
+let current = SECTIONS[0];
+
+function fieldView(f) {
+  const reset = h("button", { type: "button", class: "reset", title: "Back to the default value", onclick: () => {
+    setVal(f, clone(defVal(f)));
+    renderSection(current.id, true);
+  } }, icon("reset", 13), "Default");
+  const error = h("div", { class: "error", role: "alert" });
+  const root = h("div", { class: "field", id: `field-${f.id}` },
+    h("div", { class: "field-head" }, h("label", { class: "label", for: f.id }, f.label), reset),
+    f.help && h("p", { class: "help" }, f.help),
+    CONTROLS[f.type](f),
+    error);
+  f.view = { root, reset, error };
+  refreshField(f);
+  return root;
+}
+function refreshField(f) {
+  if (!f.view) return;
+  f.view.reset.hidden = same(val(f), defVal(f));
+  const p = problem(f);
+  f.view.error.textContent = p;
+  f.view.root.classList.toggle("invalid", !!p);
+  f.redraw?.();
+}
+function changed(f) {
+  if (f?.view) refreshField(f);
+  updateChrome();
+}
+function updateChrome() {
+  const dirty = isDirty();
+  const firstRun = !saved.config;
+  statusPill.className = "pill " + (dirty ? "dirty" : "saved");
+  statusPill.textContent = firstRun ? "Not saved yet" : dirty ? "Unsaved changes" : "All changes saved";
+  discardBtn.hidden = !dirty || firstRun;
+  for (const sec of SECTIONS) {
+    const fields = FIELDS.filter(f => f.section === sec.id);
+    sec.navEl.classList.toggle("active", sec === current);
+    sec.navEl.classList.toggle("changed", !!saved[sec.file] && fields.some(f => !same(val(f), savedVal(f))));
+    sec.navEl.classList.toggle("invalid", fields.some(f => problem(f)));
+  }
+}
+
+function banners() {
+  const list = [];
+  if (!saved.config) list.push(h("div", { class: "banner" }, h("b", {}, "Welcome! These are the default settings."),
+    `Fill in your name, look through the pages, then press Save to create ${paths.config}.`));
+  for (const n of notices) list.push(h("div", { class: "banner warn" }, n));
+  return list;
+}
+
+function renderSection(id, keepScroll = false) {
+  const sec = SECTIONS.find(s => s.id === id) || SECTIONS[0];
+  mic.stop();
+  mic.listeners.clear();
+  preview?.stop();
+  preview = null;
+  const scroll = keepScroll ? main.scrollTop : 0;
+  current = sec;
+  const cards = sec.cards.map(c => h("section", { class: "card" },
+    c.title && h("h2", {}, c.title),
+    h("div", { class: "card-body" }, c.fields.map(fieldView))));
+  const head = h("div", { class: "section-head" },
+    h("div", {}, h("h1", {}, sec.title), h("p", { class: "intro" }, sec.intro)),
+    h("button", { type: "button", class: "btn ghost small", onclick: () => resetSection(sec) }, icon("reset", 14), "Reset page"));
+  content.className = "content" + (sec.wide ? " wide" : "");
+  content.replaceChildren(...banners(), head,
+    sec.wide ? h("div", { class: "split" }, h("div", { class: "cards" }, cards), previewAside()) : h("div", { class: "cards" }, cards));
+  if (preview) { preview.setState(preview.state); preview.start(); }
+  main.scrollTop = scroll;
+  updateChrome();
+}
+function go(id) {
+  history.replaceState(null, "", `#${id}`);
+  renderSection(id);
+}
+function resetSection(sec) {
+  for (const f of FIELDS.filter(f => f.section === sec.id)) setVal(f, clone(defVal(f)));
+  renderSection(sec.id, true);
+  toast(`${sec.title} is back to the defaults. Nothing is written until you press Save.`);
+}
+function resetAll() {
+  if (!confirm("Put every setting back to the defaults, including your name, contacts and websites?\n\nNothing is written until you press Save.")) return;
+  S = clone(D);
+  renderSection(current.id, true);
+  toast("Everything is back to the defaults. Press Save to keep it, or Discard changes to undo.");
+}
+function discard() {
+  S = { config: clone(saved.config) || clone(D.config), ui: clone(saved.ui) || clone(D.ui) };
+  fillMissing();
+  renderSection(current.id, true);
+  toast("Changes discarded.");
+}
+
+function renderNav() {
+  nav.replaceChildren(
+    ...SECTIONS.map(sec => sec.navEl = h("button", { type: "button", class: "nav-item", onclick: () => go(sec.id) },
+      icon(sec.id), h("span", { class: "nav-label" }, sec.title), h("span", { class: "nav-mark" }))),
+    h("div", { class: "nav-foot" },
+      h("button", { type: "button", class: "nav-item", onclick: showJson }, icon("code"), h("span", { class: "nav-label" }, "Preview the files")),
+      h("button", { type: "button", class: "nav-item", onclick: resetAll }, icon("reset"), h("span", { class: "nav-label" }, "Reset everything")),
+      h("div", { class: "nav-paths" }, "Saves to", h("br"), paths.config, h("br"), paths.ui)));
+}
+
+function showJson() {
+  const files = [["config", paths.config], ["ui", paths.ui]];
+  let which = "config";
+  const pre = h("pre", { class: "code" });
+  const tabs = files.map(([key, path]) => h("button", { type: "button", class: "tab", onclick: () => { which = key; draw(); } }, path));
+  const draw = () => {
+    pre.textContent = formatJson(S[which], which);
+    tabs.forEach((t, i) => t.classList.toggle("active", files[i][0] === which));
+  };
+  const copy = h("button", { type: "button", class: "btn small", onclick: async () => {
+    await navigator.clipboard.writeText(pre.textContent);
+    copy.textContent = "Copied";
+    setTimeout(() => { copy.textContent = "Copy"; }, 1500);
+  } }, "Copy");
+  const dialog = h("dialog", { "aria-label": "Settings files" },
+    h("div", { class: "dialog-head" }, tabs, h("div", { class: "spacer" }), copy,
+      h("button", { type: "button", class: "icon-btn", "aria-label": "Close", onclick: () => dialog.close() }, icon("close"))),
+    h("p", { class: "dialog-note" }, "Exactly what Save writes, including changes you haven't saved yet."),
+    pre);
+  dialog.addEventListener("close", () => dialog.remove());
+  document.body.append(dialog);
+  draw();
+  dialog.showModal();
+}
+
+function toast(text, tone = "info", details = []) {
+  const t = h("div", { class: `toast ${tone}`, role: tone === "error" ? "alert" : "status" },
+    h("div", {}, text),
+    details.length > 0 && h("ul", {}, details.map(d => h("li", {}, d))),
+    h("button", { type: "button", class: "icon-btn", "aria-label": "Dismiss", onclick: () => t.remove() }, icon("close", 14)));
+  document.getElementById("toasts").append(t);
+  setTimeout(() => t.remove(), tone === "error" || details.length ? 14000 : 5000);
+}
+
+function afterSaveNotes(before) {
+  const notes = [];
+  for (const key of ["model_plugged_in", "model_on_battery"]) {
+    const m = S.config[key];
+    if (info.models && !info.models.includes(fullModel(m)) && !notes.some(n => n.includes(`"${m}"`)))
+      notes.push(`The model "${m}" isn't downloaded yet: run the Setup task (or "ollama pull ${m}").`);
+  }
+  for (const v of S.config.piper_voices || [])
+    if (!(info.voices || []).includes(v)) notes.push(`Run the Setup task to download the voice "${v}".`);
+  if (before && before.whisper_model !== S.config.whisper_model)
+    notes.push(`Jarvis downloads the "${S.config.whisper_model}" speech model the next time it starts, which can take a few minutes.`);
+  return notes;
+}
+
+async function save() {
+  const bad = FIELDS.filter(f => problem(f));
+  if (bad.length) {
+    const f = bad[0];
+    if (current.id !== f.section) go(f.section);
+    const el = document.getElementById(`field-${f.id}`);
+    el?.scrollIntoView({ block: "center", behavior: "smooth" });
+    el?.classList.add("flash");
+    toast(`Fix ${bad.length === 1 ? "this setting" : `${bad.length} settings`} before saving. ${f.label}: ${problem(f)}`, "error");
+    return;
+  }
+  saveBtn.disabled = true;
+  try {
+    const res = await api("/api/settings", { config: formatJson(S.config, "config"), ui: formatJson(S.ui, "ui") });
+    const notes = afterSaveNotes(saved.config);
+    saved = { config: clone(S.config), ui: clone(S.ui) };
+    paths = res.paths;
+    notices = [];
+    renderNav();
+    renderSection(current.id, true);
+    toast(`Saved ${paths.config} and ${paths.ui}. Restart Jarvis to use the new settings.`, "ok", notes);
+  } catch (e) {
+    toast(e.message, "error");
+  } finally {
+    saveBtn.disabled = false;
+  }
+}
+
+// Settings files from an older Jarvis may lack newer keys: fill them in from the defaults.
+function fillMissing() {
+  const added = [];
+  for (const file of ["config", "ui"]) {
+    for (const k of Object.keys(D[file])) if (!(k in S[file])) { S[file][k] = clone(D[file][k]); added.push(k); }
+  }
+  for (const k of ["colors", "spin"]) if (S.ui[k] && typeof S.ui[k] === "object") S.ui[k] = { ...D.ui[k], ...S.ui[k] };
+  return added;
+}
+
+async function load() {
+  try {
+    const r = await api("/api/settings");
+    info = r;
+    D = r.defaults;
+    paths = r.paths;
+    saved = { config: r.config, ui: r.ui };
+    S = { config: clone(r.config) || clone(D.config), ui: clone(r.ui) || clone(D.ui) };
+    notices = [...r.problems];
+    if (!r.ui && r.config) notices.push(`${paths.ui} doesn't exist yet, so the Orb page shows the defaults. Save to create it.`);
+    const added = fillMissing();
+    if (r.config && added.length) notices.push(`Your settings were missing ${added.join(", ")}, so the defaults were filled in. Save to add them to the file.`);
+  } catch (e) {
+    content.replaceChildren(h("div", { class: "banner warn" }, h("b", {}, "Couldn't load the settings."), e.message));
+    statusPill.textContent = "Offline";
+    return;
+  }
+  renderNav();
+  renderSection(location.hash.slice(1) || "general");
+}
+
+saveBtn.addEventListener("click", save);
+discardBtn.addEventListener("click", discard);
+document.addEventListener("keydown", e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); save(); }
+});
+window.addEventListener("beforeunload", e => {
+  if (S && isDirty()) { e.preventDefault(); e.returnValue = ""; }
+});
+window.addEventListener("pagehide", () => navigator.sendBeacon(`/api/bye?token=${encodeURIComponent(TOKEN)}`));
+load();
+</script>
+</body>
+</html>

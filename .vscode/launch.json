@@ -1,0 +1,22 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Jarvis (text mode)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "jarvis",
+      "args": ["--text"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Jarvis (voice)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "jarvis",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}
