@@ -53,7 +53,7 @@ Or edit the files by hand. Everything is in `config/config.json`:
 - `sites`: website names → address (e.g. `"github": "github.com"`), so "open github" works without spelling out the URL
 - `contacts`: names → email addresses (e.g. `"mom": "mom@example.com"`), so you can say "email mom" instead of spelling out the address
 - `browsers`: browsers Jarvis can open sites or new tabs in (command, flags before the URL, blank new-tab page)
-- `action_words`: Jarvis only offers its tools when your request contains one of these, so small talk stays fast. Add a word if a request should trigger a tool but doesn't
+- `tool_words`: for each tool, the words that offer it to the model (`"battery_status": ["battery", "charging"]`). Jarvis only offers the tools whose words your request contains as whole words, so small talk stays fast and the model picks from just a few. Add a word if a request should trigger a tool but doesn't; an empty list turns the tool off
 - `wake_beep`, `sleep_beep`: the beeps when Jarvis wakes up and goes back to sleep (pitch in `hz`, length in `ms`)
 - `beep_grace_seconds`: how long to ignore the mic after the wake beep, so its echo doesn't start a recording
 - `memory_file`, `log_dir`: where memories and logs are kept, relative to the project folder
@@ -71,7 +71,7 @@ The orb's look lives in `config/ui.json`:
 
 Every key in both files is required; if one is missing Jarvis tells you which on startup. To try different settings without touching your main file: `python -m jarvis --config other.json`.
 
-New abilities: write a function with a clear docstring in one of the modules in `jarvis/tools/` and add it to the list in `Tools.__init__` (`jarvis/tools/__init__.py`). The model decides when to call it.
+New abilities: write a function with a clear docstring in one of the modules in `jarvis/tools/` and add it to the list in `Tools.__init__` (`jarvis/tools/__init__.py`). Then give it its words in `tool_words`, in `config/defaults/config.json` and your own `config/config.json` (Jarvis tells you on startup if you forget), and a name on the settings page in `TOOL_LABELS` (`jarvis/settings/page.html`). The model decides when to call it.
 
 Memories are stored in `data/memory.json`. Delete the file to wipe them. Logs (tool calls, status, full conversation) go to `logs/jarvis.log`, which is cleared on each launch.
 

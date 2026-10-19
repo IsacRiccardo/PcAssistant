@@ -1,7 +1,7 @@
 {
   "user_name": "",
   "user_title": "",
-  "personality": "You are Jarvis, a witty, loyal and efficient personal assistant running locally on the user's Windows laptop. You can open and close apps, open websites, search the web, check the time and battery, and remember facts the user tells you.",
+  "personality": "You are Jarvis, a witty, loyal and efficient personal assistant running locally on the user's Windows laptop. You can open and close apps, open websites, search the web, check the time, battery, weather and stock prices, and remember facts the user tells you.",
   "greeting": "Jarvis online. How can I help?",
   "farewell": "Shutting down. Goodbye.",
 
@@ -53,9 +53,26 @@
     "edge":    { "command": "msedge", "args": ["-new-tab"], "new_tab": "edge://newtab" }
   },
 
-  "action_words": [
-    "open", "launch", "start", "close", "quit", "search", "google", "look up", "find out", "time", "date",
-    "battery", "remember", "website", "tab", "browser", "price", "stock", "shares", "weather",
-    "news", "latest", "current", "score", "who won", "compose", "mail", "send"
-  ]
+  "tool_words": {
+    "get_time": ["time", "date", "day", "clock", "o'clock"],
+    "open_app": ["open", "launch", "start"],
+    "close_app": ["close", "quit", "exit", "kill"],
+    "open_website": ["open", "website", "site", "tab", "tabs", "browser"],
+    "search_web": ["search", "google"],
+    "compose_email": ["email", "e-mail", "mail", "compose", "send", "write to"],
+    "get_weather": [
+      "weather", "forecast", "temperature", "degrees", "rain", "raining", "snow", "snowing", "sunny", "cold",
+      "hot", "warm", "freezing", "windy", "umbrella"
+    ],
+    "get_stock_price": [
+      "price", "prices", "stock", "stocks", "shares", "market", "crypto", "bitcoin", "ethereum",
+      "nasdaq", "dow jones", "s&p"
+    ],
+    "web_lookup": [
+      "look up", "find out", "search", "news", "headlines", "latest", "current", "happening",
+      "score", "scores", "who won"
+    ],
+    "battery_status": ["battery", "charge", "charging", "plugged"],
+    "remember": ["remember", "don't forget", "note that"]
+  }
 }

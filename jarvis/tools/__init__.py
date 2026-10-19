@@ -3,8 +3,10 @@ Tools: functions the model can decide to call.
 The docstrings matter - Ollama turns them into the tool descriptions.
 
 To add a new ability: write a function (or a method, if it needs settings or state) with a
-clear docstring in one of the modules here, then add it to the list in Tools.__init__.
+clear docstring in one of the modules here, then add it to the list in Tools.__init__ and give it
+its words in tool_words in the config.
 """
+import inspect
 import logging
 
 from ..config import Config
@@ -12,9 +14,22 @@ from ..memory import Memory
 from ..phrases import words
 from .email import EmailComposer
 from .launcher import Launcher
-from .lookup import battery_status, get_stock_price, get_time, web_lookup
+from .lookup import battery_status, get_stock_price, get_time, get_weather, web_lookup
 
 log = logging.getLogger("jarvis")
+
+
+def _arguments(fn, args: dict) -> dict:
+    """Small models sometimes copy the tool's own schema around the arguments, like
+    {'type': 'object', 'properties': {'company': 'bitcoin'}}. Unwrap that and keep only what fn takes."""
+    for _ in range(3):   # the wrappers can be nested: {'parameters': {'properties': {...}}}
+        inner = next((args[k] for k in ("properties", "parameters", "arguments") if isinstance(args.get(k), dict)), None)
+        if inner is None:
+            break
+        args = inner
+    takes = inspect.signature(fn).parameters
+    # a value that is itself a schema ({'type': 'string', ...}) means the model never filled it in
+    return {k: v for k, v in args.items() if k in takes and not (isinstance(v, dict) and "type" in v)}
 
 
 class Tools:
@@ -24,14 +39,19 @@ class Tools:
         self.launcher = Launcher(cfg)
         self.email = EmailComposer(cfg)
         self.all = [get_time, self.launcher.open_app, self.launcher.close_app, self.launcher.open_website,
-                    self.launcher.search_web, self.email.compose_email, get_stock_price,
-                    web_lookup, battery_status, self.remember]
+                    self.launcher.search_web, self.email.compose_email, get_weather,
+                    get_stock_price, web_lookup, battery_status, self.remember]
         self.by_name = {f.__name__: f for f in self.all}
+        missing = self.by_name.keys() - cfg.tool_words.keys()
+        if missing:
+            raise SystemExit(f"config.json: 'tool_words' is missing: {', '.join(sorted(missing))}")
 
-    def wanted(self, text: str) -> bool:
-        """Only offer tools when the request sounds like an action, so small talk stays fast."""
-        text = words(text)   # the action words are in this form too, so accents never matter
-        return any(w in text for w in self.cfg.action_words)
+    def offered(self, text: str) -> list | None:
+        """The tools whose words the request contains, or None for small talk, which stays fast that way.
+        Fewer tools to choose from also means a small model picks the right one more often."""
+        text = f" {words(text)} "   # the tool words are in this form too, so accents never matter
+        found = [f for f in self.all if any(f" {w} " in text for w in self.cfg.tool_words[f.__name__])]
+        return found or None
 
     def begin(self, request: str) -> None:
         """A new request: tools can check the model's arguments against what the user actually said."""
@@ -40,7 +60,7 @@ class Tools:
     def call(self, name: str, args: dict) -> str:
         fn = self.by_name.get(name)
         try:
-            result = fn(**args) if fn else f"Failed: there is no tool called {name}. Use one of: {', '.join(self.by_name)}."
+            result = fn(**_arguments(fn, args)) if fn else f"Failed: there is no tool called {name}. Use one of: {', '.join(self.by_name)}."
         except Exception as e:
             result = f"Failed: {e}"
         log.info("[tool] %s(%s) -> %s", name, args, result)

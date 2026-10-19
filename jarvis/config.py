@@ -66,7 +66,7 @@ class Config:
     sites: dict[str, str]
     contacts: dict[str, str]
     browsers: dict[str, Browser]
-    action_words: tuple[str, ...]
+    tool_words: dict[str, tuple[str, ...]]   # tool name -> words that offer it to the model
 
     @classmethod
     def load(cls, path: Path) -> "Config":
@@ -86,8 +86,9 @@ class Config:
         for key in ("sites", "contacts"):
             data[key] = {k.lower(): v for k, v in data[key].items()}
         data["browsers"] = {k.lower(): Browser(**v) for k, v in data["browsers"].items()}
-        for key in ("action_words", "sleep_phrases", "shutdown_phrases"):
+        for key in ("sleep_phrases", "shutdown_phrases"):
             data[key] = tuple(words(w) for w in data[key])
+        data["tool_words"] = {k: tuple(words(w) for w in v) for k, v in data["tool_words"].items()}
         data["languages"] = tuple(lang.strip().lower() for lang in data["languages"])
         data["piper_voices"] = tuple(data["piper_voices"])
         return cls(**data)

@@ -136,6 +136,9 @@ input[type=range] { width: 100%; accent-color: var(--accent); margin: 0; }
 .chips.fixed { cursor: default; min-height: 38px; align-items: center; }
 .chips .empty { padding: 0 6px; }
 .picks { display: grid; gap: 8px; }
+.tool-words { display: grid; gap: 8px; }
+.tool-row { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 12px; align-items: start; }
+.tool-row label { font-size: 13px; color: var(--muted); padding-top: 9px; }
 
 .table { display: grid; gap: 8px; }
 .rows { display: grid; gap: 8px; }
@@ -235,7 +238,8 @@ pre.code { margin: 0; padding: 14px 16px 18px; max-height: 68vh; overflow: auto;
   .nav-item { width: auto; white-space: nowrap; }
   .nav-foot { display: none; }
   .content { padding: 20px 16px 80px; }
-  .slider { grid-template-columns: minmax(0, 1fr); }
+  .slider, .tool-row { grid-template-columns: minmax(0, 1fr); }
+  .tool-row { gap: 4px; }
   .rings .row, .browsers .row { --cols: 1fr 1fr !important; }
   .row.head { display: none; }
 }
@@ -425,6 +429,12 @@ function voicesStatus(list) {
   return notes.length ? { tone: "warn", text: notes.join(" ") } : { tone: "ok", text: "All downloaded." };
 }
 const wakeOptions = () => (info.wake_words || []).map(value => ({ value, label: titleCase(value.replace(/_/g, " ")) }));
+const TOOL_LABELS = {   // the tools in jarvis/tools/, by function name
+  get_time: "Time and date", open_app: "Open an app", close_app: "Close an app",
+  open_website: "Open a website or tab", search_web: "Google search on screen", compose_email: "Write an email",
+  get_weather: "Weather", get_stock_price: "Stock and crypto prices", web_lookup: "Look up news and facts",
+  battery_status: "Battery", remember: "Remember a fact",
+};
 
 // ---------------------------------------------------------------- what's on each page
 const SECTIONS = [
@@ -515,8 +525,8 @@ const SECTIONS = [
         help: "Saying one of these ends the conversation right away, so Jarvis waits for the wake word again." },
       { key: "shutdown_phrases", label: "Shut down", type: "chips", placeholder: "Add a phrase…",
         help: "These stop Jarvis completely. They only count as a short command on its own (5 words or fewer), so \"shut down\" works but a longer sentence containing it doesn't." },
-      { key: "action_words", label: "Action words", type: "chips", placeholder: "Add a word…",
-        help: "Jarvis only offers its tools (opening apps, searching, email…) when your request contains one of these, which keeps small talk fast. Add a word if a request should do something but doesn't." },
+      { key: "tool_words", label: "Action words", type: "toolwords", placeholder: "Add a word…",
+        help: "Jarvis only offers a tool when your request contains one of its words as a whole word (\"time\" doesn't count inside \"sometimes\"). That keeps small talk fast and helps the model pick the right tool. Add a word if a request should do something but doesn't; a tool with no words is never used." },
     ] },
   ] },
   { id: "websites", title: "Websites & browsers", file: "config", intro: "Shortcuts for the websites you open by voice. Apps need nothing here: Jarvis finds everything in your Start menu.", cards: [
@@ -737,6 +747,35 @@ function colorInput(value, onInput, id) {
   });
   return h("span", { class: "color" }, swatch, text);
 }
+function chipBox(get, set, id, placeholder) {
+  const box = h("div", { class: "chips" });
+  const input = h("input", { type: "text", id, placeholder: placeholder || "Add…", spellcheck: "false", autocomplete: "off" });
+  const draw = () => box.replaceChildren(...get().map((w, i) => h("span", { class: "chip" }, w,
+    h("button", { type: "button", title: `Remove "${w}"`, "aria-label": `Remove ${w}`, onclick: () => {
+      const list = get().slice();
+      list.splice(i, 1);
+      set(list);
+      draw();
+      input.focus();
+    } }, "×"))), input);
+  const add = refocus => {
+    const list = get().slice();
+    for (const p of input.value.split(",").map(s => s.trim().toLowerCase()).filter(Boolean))
+      if (!list.includes(p)) list.push(p);
+    input.value = "";
+    set(list);
+    draw();
+    if (refocus) input.focus();
+  };
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === ",") { e.preventDefault(); add(true); }
+    else if (e.key === "Backspace" && !input.value && get().length) { set(get().slice(0, -1)); draw(); input.focus(); }
+  });
+  input.addEventListener("blur", () => { if (input.value.trim()) add(false); });
+  box.addEventListener("click", e => { if (e.target === box) input.focus(); });
+  draw();
+  return box;
+}
 function hintView(hint, status) {
   return [hint && h("span", {}, hint + " "), status && h("span", { class: status.tone }, status.text)];
 }
@@ -816,33 +855,17 @@ const CONTROLS = {
     return h("div", { class: "pick" }, h("div", { class: "pick-row" }, select, other), hint);
   },
   chips(f) {
-    const box = h("div", { class: "chips" });
-    const input = h("input", { type: "text", id: f.id, placeholder: f.placeholder || "Add…", spellcheck: "false", autocomplete: "off" });
-    const draw = () => box.replaceChildren(...val(f).map((w, i) => h("span", { class: "chip" }, w,
-      h("button", { type: "button", title: `Remove "${w}"`, "aria-label": `Remove ${w}`, onclick: () => {
-        const list = val(f).slice();
-        list.splice(i, 1);
-        setVal(f, list);
-        draw();
-        input.focus();
-      } }, "×"))), input);
-    const add = refocus => {
-      const list = val(f).slice();
-      for (const p of input.value.split(",").map(s => s.trim().toLowerCase()).filter(Boolean))
-        if (!list.includes(p)) list.push(p);
-      input.value = "";
-      setVal(f, list);
-      draw();
-      if (refocus) input.focus();
-    };
-    input.addEventListener("keydown", e => {
-      if (e.key === "Enter" || e.key === ",") { e.preventDefault(); add(true); }
-      else if (e.key === "Backspace" && !input.value && val(f).length) { setVal(f, val(f).slice(0, -1)); draw(); input.focus(); }
-    });
-    input.addEventListener("blur", () => { if (input.value.trim()) add(false); });
-    box.addEventListener("click", e => { if (e.target === box) input.focus(); });
-    draw();
-    return box;
+    return chipBox(() => val(f), list => setVal(f, list), f.id, f.placeholder);
+  },
+  toolwords(f) {
+    // one list of words per tool, in the order the defaults have them
+    const names = [...new Set([...Object.keys(defVal(f) || {}), ...Object.keys(val(f) || {})])];
+    return h("div", { class: "tool-words" }, names.map(name => {
+      const id = `${f.id}-${name}`;
+      return h("div", { class: "tool-row" },
+        h("label", { for: id }, TOOL_LABELS[name] || name),
+        chipBox(() => val(f)[name] || [], list => setVal(f, { ...val(f), [name]: list }), id, f.placeholder));
+    }));
   },
   picks(f) {
     // the chosen values as chips, in order, and a list to add another one from
@@ -1539,6 +1562,8 @@ function fillMissing() {
     for (const k of Object.keys(D[file])) if (!(k in S[file])) { S[file][k] = clone(D[file][k]); added.push(k); }
   }
   for (const k of ["colors", "spin"]) if (S.ui[k] && typeof S.ui[k] === "object") S.ui[k] = { ...D.ui[k], ...S.ui[k] };
+  // a tool added since the file was written gets its default words
+  if (S.config.tool_words && typeof S.config.tool_words === "object") S.config.tool_words = { ...D.config.tool_words, ...S.config.tool_words };
   return added;
 }
 

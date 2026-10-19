@@ -20,7 +20,8 @@ RULES = (
     "or for live information.\n"
     "You have no internet access except through your tools. Never say you are looking "
     "something up unless you are calling a tool, and never guess prices, news or other "
-    "live facts. If you can't get it, say so plainly.\n"
+    "live facts. If you can't get it, say so plainly. A tool result is live data fetched just "
+    "now, so when one answers the question, give the user that answer.\n"
     "Only say you did something if a tool result confirms it. If a tool reports an error "
     "or that it doesn't know something, tell the user it didn't work. You can't see the "
     "screen, so don't describe what is on it."
@@ -107,6 +108,7 @@ class Brain:
             messages=messages,
             tools=tools,
             stream=True,
+            think=False,   # thinking models (qwen3) would reason for seconds before saying anything; others ignore it
             keep_alive=self.cfg.keep_alive,
             options={"temperature": self.cfg.temperature, "num_ctx": self.cfg.context_size, **options},
         )
@@ -145,7 +147,7 @@ class Brain:
             yield self.tools.email.answer(text, language)
             return
 
-        tools = self.tools.all if self.tools.wanted(text) else None
+        tools = self.tools.offered(text)
         # next to the request, where small models actually heed them; history stays clean
         notes = [f"Reply in {languages.name(language)}."] if language else []
         if tools is None:
