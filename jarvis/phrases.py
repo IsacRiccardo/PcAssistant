@@ -5,7 +5,7 @@ import unicodedata
 
 def words(text: str) -> str:
     """Lowercase words only, without accents, so 'Shut down.' and 'shut down' compare equal, and so do
-    'Oprește-te' and 'opreste te' (speech recognition doesn't always write Romanian accents the same way)."""
+    'Café' and 'cafe' (speech recognition doesn't always write accents the same way)."""
     text = "".join(c for c in unicodedata.normalize("NFKD", text.lower()) if not unicodedata.combining(c))
     return " ".join(re.sub(r"[^\w\s']", " ", text).split())
 

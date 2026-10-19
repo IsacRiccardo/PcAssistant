@@ -82,14 +82,23 @@ class Brain:
 
     def system_prompt(self) -> str:
         facts = "\n".join(f"- {f}" for f in self.memory.facts()) or "(nothing yet)"
-        name = f"The user's name is {self.cfg.user_name}.\n" if self.cfg.user_name else ""
         return (
             f"{self.cfg.personality}\n\n"
-            f"{name}"
+            f"{self._addressing()}"
             f"Things you remember about the user:\n{facts}\n\n"
             f"{RULES}\n"
             f"Site names open_website knows: {', '.join(self.cfg.sites)}."
         )
+
+    def _addressing(self) -> str:
+        """How to address the user. Given only their name, small models put it in nearly every reply."""
+        name, title = self.cfg.user_name, self.cfg.user_title
+        if title:
+            known = f"The user's name is {name}, but don't call them by it. " if name else ""
+            return f'{known}Address the user as "{title}", at most once in a reply.\n'
+        if name:
+            return f"The user's name is {name}. Use it only now and then, not in every reply.\n"
+        return ""
 
     def _chat(self, messages: list, tools=None, **options):
         # the same context_size every call: Ollama reloads the model whenever it changes
@@ -122,7 +131,7 @@ class Brain:
 
     def reply(self, text: str, language: str | None = None) -> Iterator[str]:
         """The reply, one sentence at a time as the model writes it, so speaking can start early.
-        language is the one the user spoke in ('ro'), if known; the reply is in it too."""
+        language is the one the user spoke in ('de'), if known; the reply is in it too."""
         spoken = []
         for sentence in self._reply(text, language):
             spoken.append(sentence)

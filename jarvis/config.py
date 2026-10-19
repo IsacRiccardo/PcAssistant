@@ -29,6 +29,7 @@ class Browser:
 class Config:
     # who Jarvis is
     user_name: str
+    user_title: str                 # what Jarvis calls the user instead of their name ('sir', 'miss'); empty: the name
     personality: str
     greeting: str
     farewell: str
@@ -44,7 +45,7 @@ class Config:
     wake_word: str
     wake_threshold: float
     whisper_model: str
-    languages: tuple[str, ...]      # what the user speaks, e.g. ('en', 'ro'); empty: any language
+    languages: tuple[str, ...]      # what the user speaks, e.g. ('en', 'de'); empty: any language
     silence_level: float
     silence_seconds: float
     no_speech_seconds: float

@@ -114,7 +114,7 @@ def main():
     parser.add_argument("--config", type=Path, default=ROOT / "config" / "config.json",
                         help="settings file (default: config/config.json)")
     args = parser.parse_args()
-    # a terminal shows Romanian letters anyway, but redirected output would fall back to a code page without ș
+    # a terminal shows accented letters anyway, but redirected output would fall back to a code page without them
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
     cfg = Config.load(args.config)

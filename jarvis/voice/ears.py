@@ -46,7 +46,7 @@ class LanguagePicker:
         # (a code Whisper doesn't know matches nothing; then it keeps its own ranking)
         ranked = [[(token, p) for token, p in found if token in self.tokens] or found
                   for found in self.whisper.detect_language(encoder_output)]
-        self.picked = ranked[0][0][0][2:-2]   # '<|ro|>' -> 'ro'
+        self.picked = ranked[0][0][0][2:-2]   # '<|de|>' -> 'de'
         return ranked
 
 

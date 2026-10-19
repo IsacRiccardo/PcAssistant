@@ -64,7 +64,7 @@ Step "Downloading Whisper '$($cfg.whisper_model)' speech model"
 & $vpy -c "from faster_whisper import WhisperModel; WhisperModel('$($cfg.whisper_model)', device='cpu', compute_type='int8')"
 
 New-Item -ItemType Directory -Force voices | Out-Null
-foreach ($name in $cfg.piper_voices) {        # e.g. en_US-lessac-medium, ro_RO-mihai-medium
+foreach ($name in $cfg.piper_voices) {        # e.g. en_US-lessac-medium, de_DE-thorsten-medium
     Step "Downloading Piper voice '$name'"
     $parts = $name.Split("-")
     $locale = $parts[0]; $speaker = $parts[1]; $quality = $parts[2]

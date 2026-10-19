@@ -2,8 +2,6 @@
 
 Runs fully offline on your laptop: wake word (openWakeWord) → speech to text (faster-whisper) → local AI (Ollama, Llama 3.2 3B) → voice (Piper TTS).
 
-Speaks English and Romanian: talk to it in either and it answers in the same language, with an English or a Romanian voice.
-
 ## First-time setup
 
 1. Clone or download this repository somewhere simple, like `C:\Projects\jarvis` (avoid OneDrive folders).
@@ -30,7 +28,6 @@ Plug the laptop in. On battery Jarvis switches to the smaller 1B model automatic
 - "How's my battery?"
 - "Remember that my favourite football team is Poli Timișoara"
 - "Send an email" (Jarvis asks who to, the subject and what it should say), or all at once: "Send an email to mom saying I'll be late". Say addresses like "john at gmail dot com". Jarvis opens the filled-in email in Gmail; you check it and press Send. Say "cancel" to drop it.
-- In Romanian: "Cât e ceasul?", "Deschide Spotify", "Caută pe net vremea în Timișoara", "Trimite un email" (addresses like "ion arond gmail punct com", "anulează" to drop it), and "asta e tot" or "oprește-te" to send it to sleep or shut it down.
 
 ## Customising
 
@@ -41,15 +38,16 @@ The factory settings live in `config/defaults/`. If `config/config.json` or `con
 Or edit the files by hand. Everything is in `config/config.json`:
 
 - `personality`, `greeting`, `user_name`
-- `languages`: the languages you speak, as codes (`["en", "ro"]`). Jarvis works out which one each command is in and answers in it. With one language it skips that step, so it replies a little faster; an empty list understands any language. Needs a Whisper model without `.en`
-- `piper_voices`: one Piper voice per language (`"ro_RO-mihai-medium"`; the name starts with the language). Replies use the voice for the language you spoke; the first voice also says the greeting and farewell. Rerun setup after adding one, to download it
+- `user_title`: what Jarvis calls you instead of your name, like `"sir"`, `"miss"` or `"ma'am"`, at most once in a reply. Leave it empty and Jarvis uses `user_name` now and then
+- `languages`: the languages you speak, as codes (`["en", "de"]`). Jarvis works out which one each command is in and answers in it. With one language it skips that step, so it replies a little faster; an empty list understands any language. Needs a Whisper model without `.en`
+- `piper_voices`: one Piper voice per language (`"de_DE-thorsten-medium"`; the name starts with the language). Replies use the voice for the language you spoke; the first voice also says the greeting and farewell. Rerun setup after adding one, to download it
 - `model_plugged_in` / `model_on_battery`: any model from ollama.com (run `ollama pull <name>` after changing)
 - `context_size`: how many tokens of conversation the model can see. 2048 lets the 3B model fit entirely on a 4 GB graphics card, which makes replies about 30% faster; raise it to 4096 if Jarvis forgets things in long conversations
 - `keep_alive`: how long the model stays loaded after the last request (e.g. `"30m"`, or `-1` for as long as Jarvis runs). Loading it again takes several seconds
 - `silence_level`: raise it if Jarvis never stops recording in a noisy room, lower it if it cuts you off
 - `silence_seconds`: how long you have to be quiet before Jarvis treats the command as finished. Lower is snappier; raise it if Jarvis cuts you off when you pause mid-sentence
 - `follow_up_seconds`: how long Jarvis keeps waiting for your next command before going back to sleep
-- `sleep_phrases`: short phrases that end the conversation right away. This and the other phrase lists can mix languages, and accents don't matter ("oprește" and "opreste" both work)
+- `sleep_phrases`: short phrases that end the conversation right away. This and the other phrase lists can mix languages, and accents don't matter ("café" and "cafe" both work)
 - `shutdown_phrases`, `farewell`: short phrases that stop Jarvis completely, and what it says before it goes. They only count as a short command on its own (5 words or fewer), so "shut down" works but a longer sentence containing it doesn't
 - `wake_threshold`: lower (0.3) if it doesn't hear you, higher (0.7) if it wakes by accident
 - `sites`: website names → address (e.g. `"github": "github.com"`), so "open github" works without spelling out the URL

@@ -355,7 +355,13 @@ const LANGUAGES = [
   ["it", "Italian"], ["nl", "Dutch"], ["pt", "Portuguese"], ["pl", "Polish"], ["hu", "Hungarian"],
 ].map(([value, label]) => ({ value, label }));
 const languageName = code => LANGUAGES.find(o => o.value === code)?.label;
-const languageProblem = code => /^[a-z]{2,3}$/.test(code) ? "" : `"${code}" isn't a language code like en or ro.`;
+const languageProblem = code => /^[a-z]{2,3}$/.test(code) ? "" : `"${code}" isn't a language code like en or de.`;
+const TITLES = [
+  { value: "", label: "Your name", hint: "Or nothing, if you haven't given a name." },
+  { value: "sir", label: "Sir" },
+  { value: "miss", label: "Miss" },
+  { value: "ma'am", label: "Ma'am" },
+];
 const CONTEXT = [
   { value: 1024, label: "1,024 tokens", hint: "Fastest, but forgets the start of a conversation sooner." },
   { value: 2048, label: "2,048 tokens", hint: "Lets the 3B model fit on a 4 GB graphics card, which makes replies about 30% faster." },
@@ -378,7 +384,7 @@ const SUGGESTED_MODELS = [
   { value: "qwen2.5:7b", hint: "Smarter but slower; wants a strong PC (4.7 GB)." },
 ];
 const SUGGESTED_VOICES = ["en_US-lessac-medium", "en_US-ryan-high", "en_US-amy-medium", "en_GB-alan-medium",
-                          "en_GB-northern_english_male-medium", "ro_RO-mihai-medium"];
+                          "en_GB-northern_english_male-medium"];
 
 const fullModel = m => m.includes(":") ? m : m + ":latest";
 function modelOptions() {
@@ -395,7 +401,7 @@ function modelStatus(v) {
   if (info.models.includes(fullModel(v))) return { tone: "ok", text: "Downloaded." };
   return { tone: "warn", text: `Not downloaded yet. After saving, run the Setup task (or "ollama pull ${v}").` };
 }
-const voiceLanguage = v => v.split("-")[0].split("_")[0].toLowerCase();   // "ro" for ro_RO-mihai-medium
+const voiceLanguage = v => v.split("-")[0].split("_")[0].toLowerCase();   // "de" for de_DE-thorsten-medium
 function voiceLabel(v) {
   const [locale, speaker, quality] = v.split("-");
   const region = { en_US: "American English", en_GB: "British English" }[locale] || languageName(voiceLanguage(v)) || locale;
@@ -424,8 +430,11 @@ const wakeOptions = () => (info.wake_words || []).map(value => ({ value, label: 
 const SECTIONS = [
   { id: "general", title: "General", file: "config", intro: "Who Jarvis is, what it calls you and how it sounds.", cards: [
     { fields: [
-      { key: "user_name", label: "Your name", type: "text", placeholder: "What should Jarvis call you?",
-        help: "Jarvis uses it when it talks to you. Leave it empty and it won't use a name." },
+      { key: "user_name", label: "Your name", type: "text", placeholder: "Your first name",
+        help: "Jarvis uses it now and then when it talks to you. Leave it empty and it won't use a name." },
+      { key: "user_title", label: "Address you as", type: "pick", options: TITLES,
+        otherLabel: "Something else…", otherPlaceholder: "e.g. boss",
+        help: "What Jarvis calls you instead of your name, the way a butler says \"sir\". It says it at most once in a reply." },
       { key: "piper_voices", label: "Voices", type: "picks", options: voiceOptions, status: voicesStatus, required: true,
         addLabel: "Add a voice…", otherLabel: "Another Piper voice…", otherPlaceholder: "e.g. en_GB-alan-medium, then Enter",
         empty: "No voices yet.",

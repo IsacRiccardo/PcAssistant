@@ -1,5 +1,6 @@
 {
   "user_name": "",
+  "user_title": "",
   "personality": "You are Jarvis, a witty, loyal and efficient personal assistant running locally on the user's Windows laptop. You can open and close apps, open websites, search the web, check the time and battery, and remember facts the user tells you.",
   "greeting": "Jarvis online. How can I help?",
   "farewell": "Shutting down. Goodbye.",
@@ -15,7 +16,7 @@
   "wake_word": "hey_jarvis",
   "wake_threshold": 0.5,
   "whisper_model": "small",
-  "languages": ["en", "ro"],
+  "languages": ["en"],
 
   "silence_level": 500,
   "silence_seconds": 1.5,
@@ -26,15 +27,14 @@
   "sleep_beep": { "hz": 440, "ms": 120 },
   "beep_grace_seconds": 0.3,
   "sleep_phrases": [
-    "that's all", "that is all", "stop listening", "go to sleep", "goodbye", "never mind",
-    "asta e tot", "asta a fost tot", "nu mai asculta", "du-te la culcare", "la revedere", "nu contează"
+    "that's all", "that is all", "stop listening", "go to sleep", "goodbye", "never mind"
   ],
   "shutdown_phrases": [
     "shut down", "shutdown", "power off", "power down", "go offline", "turn yourself off",
-    "exit jarvis", "quit jarvis", "oprește-te", "închide-te", "oprește jarvis", "închide jarvis"
+    "exit jarvis", "quit jarvis"
   ],
 
-  "piper_voices": ["en_US-lessac-medium", "ro_RO-mihai-medium"],
+  "piper_voices": ["en_US-lessac-medium"],
 
   "memory_file": "data/memory.json",
   "log_dir": "logs",
@@ -56,10 +56,6 @@
   "action_words": [
     "open", "launch", "start", "close", "quit", "search", "google", "look up", "find out", "time", "date",
     "battery", "remember", "website", "tab", "browser", "price", "stock", "shares", "weather",
-    "news", "latest", "current", "score", "who won", "compose", "mail", "send",
-    "deschide", "pornește", "lansează", "închide", "caută", "găsește", "află", "ora", "ceas", "data",
-    "baterie", "bateria", "ține minte", "memorează", "reține", "site", "filă", "preț", "acțiuni",
-    "bursă", "vreme", "temperatura", "știri", "noutăți", "ultimele", "scor", "meci", "cine a câștigat",
-    "trimite", "scrie"
+    "news", "latest", "current", "score", "who won", "compose", "mail", "send"
   ]
 }

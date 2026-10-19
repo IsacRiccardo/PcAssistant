@@ -20,12 +20,10 @@ QUESTIONS = {   # asked in this order for whatever the user hasn't said yet
     "subject": "What's the subject? You can say skip.",
     "body": "What should the email say?",
 }
-CANCEL_PHRASES = {words(p) for p in ("cancel", "cancel it", "cancel the email", "forget it", "stop",
-                                     "anulează", "anulează emailul", "renunță", "las-o baltă")}
-SKIP_PHRASES = {words(p) for p in ("skip", "no subject", "none", "nothing", "no",
-                                   "sari peste", "fără subiect", "fără", "nimic", "nu")}
-SAID_AT = re.compile(r"\s+(?:at|arond|a rond)\s+")   # 'john at gmail dot com', 'ion arond gmail punct com'
-SAID_DOT = re.compile(r"\s+(?:dot|punct)\s+")
+CANCEL_PHRASES = {words(p) for p in ("cancel", "cancel it", "cancel the email", "forget it", "stop")}
+SKIP_PHRASES = {words(p) for p in ("skip", "no subject", "none", "nothing", "no")}
+SAID_AT = re.compile(r"\s+at\s+")   # 'john at gmail dot com'
+SAID_DOT = re.compile(r"\s+dot\s+")
 
 
 class EmailComposer:
@@ -89,7 +87,7 @@ class EmailComposer:
 
     def _address(self, spoken: str) -> str | None:
         """An email address from what the user said: a contact name, or an address, also spoken
-        as 'john at gmail dot com' (or in Romanian, 'ion arond gmail punct com')."""
+        as 'john at gmail dot com'."""
         text = spoken.lower()
         for name, address in self.cfg.contacts.items():
             if re.search(rf"\b{re.escape(name)}\b", text):
