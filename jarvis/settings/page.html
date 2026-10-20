@@ -1236,7 +1236,18 @@ class OrbPreview {
     const lv = this.level, m = w / 2, y = this.n("orb_y");
 
     const coreR = 28 + 18 * lv;
-    ctx.strokeStyle = color;
+    // soft light behind the core, brighter as it gets louder (as in jarvis/ui/hud.py)
+    const rgba = a => `rgba(${this.rgb.map(Math.round).join(",")},${a})`;
+    const glow = ctx.createRadialGradient(m, y, 0, m, y, coreR * 2.6);
+    glow.addColorStop(0, rgba(0.30 + 0.30 * lv));
+    glow.addColorStop(0.45, rgba(0.12 + 0.12 * lv));
+    glow.addColorStop(1, rgba(0));
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(m, y, coreR * 2.6, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = rgba(0.8);
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.arc(m, y, coreR + 5, 0, Math.PI * 2);
@@ -1245,6 +1256,7 @@ class OrbPreview {
     const bars = Math.max(0, Math.round(this.n("bars")));
     if (this.noise.length !== bars) this.noise = new Array(bars).fill(0);
     const inner = coreR + 11, nk = ease(0.35);
+    ctx.strokeStyle = color;
     ctx.lineWidth = 3;
     ctx.lineCap = "round";
     ctx.beginPath();

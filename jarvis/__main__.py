@@ -75,15 +75,20 @@ def run_text(cfg: Config, brain: Brain) -> None:
             log.info("Jarvis: %s", " ".join(reply))
 
 
+def make_hud(cfg: Config):
+    from .ui.config import UiConfig
+    try:
+        from .ui.hud import Hud
+    except ImportError:
+        raise SystemExit("The orb window needs Qt: run the setup task again (or 'pip install PySide6-Essentials'), "
+                         "or start Jarvis with --no-ui.") from None
+    return Hud(UiConfig.load(cfg.ui_config))
+
+
 def run_voice(cfg: Config, brain: Brain, no_ui: bool) -> None:
     from .ui import Status
 
-    if no_ui:
-        status = Status()
-    else:
-        from .ui.config import UiConfig
-        from .ui.hud import Hud
-        status = Hud(UiConfig.load(cfg.ui_config))
+    status = Status() if no_ui else make_hud(cfg)
 
     def voice():
         from .voice import Ears, Mouth

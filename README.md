@@ -98,7 +98,8 @@ jarvis/            the assistant, run with `python -m jarvis`
     ears.py        wake word, recording, speech to text
     mouth.py       text to speech
   ui/
-    hud.py         the floating orb overlay
+    orb.py         how the floating orb overlay moves
+    hud.py         draws it with Qt
     config.py      loads config/ui.json
     status.py      what the voice loop reports to the orb
   settings/        the settings page, run with `python -m jarvis.settings`

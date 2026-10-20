@@ -6,3 +6,4 @@ numpy
 psutil
 pyttsx3
 ddgs
+PySide6-Essentials   # Qt, draws the orb window
