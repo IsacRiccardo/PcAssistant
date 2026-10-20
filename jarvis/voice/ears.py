@@ -9,7 +9,7 @@ import sounddevice as sd
 import winsound
 
 from ..config import Config
-from ..phrases import said
+from ..phrases import said, wake_phrase
 from ..ui import Status
 
 log = logging.getLogger("jarvis")
@@ -61,7 +61,7 @@ class Ears:
         self.picker = None   # only needed when there's more than one language to choose from
         if len(cfg.languages) > 1 and self.stt.model.is_multilingual:
             self.picker = self.stt.model = LanguagePicker(self.stt.model, cfg.languages)
-        self.wake = Model(wakeword_models=[cfg.wake_word], inference_framework="onnx")
+        self.wake = Model(wakeword_models=list(cfg.wake_word), inference_framework="onnx")   # one score per wake word
         self.q = queue.Queue()
         self.transcribe(np.zeros(SAMPLE_RATE, np.float32))   # loads the speech detector now, not on the first command
         log.info("Speech models loaded")
@@ -140,10 +140,10 @@ class Ears:
                               dictating: Callable[[], bool]) -> None:
         """on_command(text, language) handles each request, on_sleep() runs when a conversation ends,
         dictating() is True while the user is answering a question like the email ones."""
-        wake_phrase = self.cfg.wake_word.replace("_", " ")
+        phrase = " or ".join(f'"{wake_phrase(w)}"' for w in self.cfg.wake_word)
         with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="int16",
                             blocksize=CHUNK, callback=self._callback):
-            log.info("Listening... say \"%s\"", wake_phrase)
+            log.info("Listening... say %s", phrase)
             self.status.set_state("sleeping")
             while True:
                 chunk = self.q.get()
@@ -158,7 +158,7 @@ class Ears:
                 on_sleep()
                 self.status.set_state("sleeping")
                 winsound.Beep(*self.cfg.sleep_beep)
-                print(f"(sleeping - say \"{wake_phrase}\")", flush=True)
+                print(f"(sleeping - say {phrase})", flush=True)
                 self._drain()
                 self.wake.reset()
                 log.info("Listening...")

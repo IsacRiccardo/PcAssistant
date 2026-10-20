@@ -1,6 +1,7 @@
 """Matching what the user said against short command phrases."""
 import re
 import unicodedata
+from pathlib import PurePath
 
 
 def words(text: str) -> str:
@@ -8,6 +9,13 @@ def words(text: str) -> str:
     'Café' and 'cafe' (speech recognition doesn't always write accents the same way)."""
     text = "".join(c for c in unicodedata.normalize("NFKD", text.lower()) if not unicodedata.combining(c))
     return " ".join(re.sub(r"[^\w\s']", " ", text).split())
+
+
+def wake_phrase(wake_word: str) -> str:
+    """What to say for a wake word: 'hey_jarvis', or a model file like
+    'wake_words/hey_computer_v0.1.onnx', is 'hey computer'."""
+    name = re.sub(r"_v\d+(\.\d+)*$", "", PurePath(wake_word).name.removesuffix(".onnx"))
+    return name.replace("_", " ")
 
 
 def said(text: str, phrases: tuple[str, ...]) -> bool:

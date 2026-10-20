@@ -428,7 +428,9 @@ function voicesStatus(list) {
   if (unvoiced.length) notes.push(`None of these speaks ${unvoiced.join(" or ")}, so Jarvis answers in it with the first voice.`);
   return notes.length ? { tone: "warn", text: notes.join(" ") } : { tone: "ok", text: "All downloaded." };
 }
-const wakeOptions = () => (info.wake_words || []).map(value => ({ value, label: titleCase(value.replace(/_/g, " ")) }));
+// "hey_jarvis", or a model file like "wake_words/hey_computer_v0.1.onnx" -> "Hey Computer" (wake_phrase in phrases.py)
+const wakePhrase = value => value.split("/").pop().replace(/\.onnx$/, "").replace(/_v\d+(\.\d+)*$/, "").replace(/_/g, " ");
+const wakeOptions = () => (info.wake_words || []).map(value => ({ value, label: titleCase(wakePhrase(value)) }));
 const TOOL_LABELS = {   // the tools in jarvis/tools/, by function name
   get_time: "Time and date", open_app: "Open an app", close_app: "Close an app",
   open_website: "Open a website or tab", search_web: "Google search on screen", compose_email: "Write an email",
@@ -483,9 +485,10 @@ const SECTIONS = [
   ] },
   { id: "listening", title: "Listening", file: "config", intro: "How Jarvis wakes up, hears your commands and knows when you've finished talking.", cards: [
     { title: "Wake word", fields: [
-      { key: "wake_word", label: "Wake word", type: "pick", options: wakeOptions, required: true,
-        otherLabel: "Custom openWakeWord model…", otherPlaceholder: "path to a .onnx model",
-        help: "What you say to wake Jarvis up." },
+      { key: "wake_word", label: "Wake words", type: "picks", options: wakeOptions, required: true,
+        addLabel: "Add a wake word…", otherLabel: "Custom openWakeWord model…", otherPlaceholder: "path to a .onnx model, then Enter",
+        empty: "No wake word yet.",
+        help: "What you say to wake Jarvis up; any of them works. For your own phrase, put its openWakeWord model (.onnx) in the wake_words folder and reopen this page; it shows up in this list." },
       { key: "wake_threshold", label: "Wake sensitivity", type: "slider", min: 0.05, max: 0.99, range: [0.1, 0.95], step: 0.05,
         ends: ["Wakes easily", "Fewer false wake-ups"],
         help: "Lower it (0.3) if Jarvis doesn't hear you; raise it (0.7) if it wakes up by accident." },
@@ -1563,6 +1566,8 @@ function fillMissing() {
   }
   for (const k of ["colors", "spin"]) if (S.ui[k] && typeof S.ui[k] === "object") S.ui[k] = { ...D.ui[k], ...S.ui[k] };
   // a tool added since the file was written gets its default words
+  // wake_word used to be a single name
+  if (typeof S.config.wake_word === "string") S.config.wake_word = [S.config.wake_word];
   if (S.config.tool_words && typeof S.config.tool_words === "object") S.config.tool_words = { ...D.config.tool_words, ...S.config.tool_words };
   return added;
 }

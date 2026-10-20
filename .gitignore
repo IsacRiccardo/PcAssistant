@@ -1,6 +1,7 @@
 .venv/
 __pycache__/
 voices/
+wake_words/
 data/
 logs/
 # your own settings: created from config/defaults/ on first run

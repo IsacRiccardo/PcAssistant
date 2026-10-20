@@ -8,6 +8,7 @@ from . import ROOT
 from .phrases import words
 
 DEFAULTS = ROOT / "config" / "defaults"   # factory settings, copied in when a settings file is missing
+WAKE_WORDS = ("hey_jarvis", "alexa", "hey_mycroft", "hey_rhasspy")   # openWakeWord's built-in wake words
 
 
 def read_settings(path: Path, default: str) -> dict:
@@ -16,6 +17,26 @@ def read_settings(path: Path, default: str) -> dict:
         path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(DEFAULTS / default, path)
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _wake_words(value: str | list[str], name: str) -> tuple[str, ...]:
+    """wake_word as a tuple: one wake word or a list of them, each a built-in name like hey_jarvis
+    or an openWakeWord model file (.onnx, relative to the project folder)."""
+    found = []
+    for w in [value] if isinstance(value, str) else value:
+        if w.endswith(".onnx"):
+            model = ROOT / w
+            if not model.is_file():
+                raise SystemExit(f"{name}: the wake word model {model} doesn't exist")
+            found.append(str(model))
+        elif w in WAKE_WORDS:
+            found.append(w)
+        else:   # openWakeWord only hears phrases it has a trained model for
+            raise SystemExit(f'{name}: there is no wake word "{w}". Use {", ".join(WAKE_WORDS)}, '
+                             "or the path to an openWakeWord model (.onnx)")
+    if not found:
+        raise SystemExit(f"{name}: wake_word needs at least one wake word")
+    return tuple(found)
 
 
 @dataclass(frozen=True)
@@ -42,7 +63,7 @@ class Config:
     temperature: float
     max_tool_rounds: int
     # hearing
-    wake_word: str
+    wake_word: tuple[str, ...]      # built-in names or paths to .onnx models; any of them wakes Jarvis
     wake_threshold: float
     whisper_model: str
     languages: tuple[str, ...]      # what the user speaks, e.g. ('en', 'de'); empty: any language
@@ -81,6 +102,7 @@ class Config:
         data = {k: v for k, v in data.items() if k in names}
         for key in ("memory_file", "log_dir", "ui_config"):
             data[key] = ROOT / data[key]
+        data["wake_word"] = _wake_words(data["wake_word"], name)
         for beep in ("wake_beep", "sleep_beep"):
             data[beep] = (int(data[beep]["hz"]), int(data[beep]["ms"]))
         for key in ("sites", "contacts"):

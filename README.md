@@ -51,6 +51,7 @@ Or edit the files by hand. Everything is in `config/config.json`:
 - `follow_up_seconds`: how long Jarvis keeps waiting for your next command before going back to sleep
 - `sleep_phrases`: short phrases that end the conversation right away. This and the other phrase lists can mix languages, and accents don't matter ("café" and "cafe" both work)
 - `shutdown_phrases`, `farewell`: short phrases that stop Jarvis completely, and what it says before it goes. They only count as a short command on its own (5 words or fewer), so "shut down" works but a longer sentence containing it doesn't
+- `wake_word`: what wakes Jarvis up: one or more of `hey_jarvis`, `alexa`, `hey_mycroft` and `hey_rhasspy` (`["hey_jarvis", "alexa"]`; any of them works). For your own phrase you need an openWakeWord model for it (a `.onnx` file: train one with openWakeWord's training notebook, or download one someone shared). Put it in the `wake_words` folder and pick it on the settings page, or add its path to the list, like `"wake_words/hey_computer.onnx"`
 - `wake_threshold`: lower (0.3) if it doesn't hear you, higher (0.7) if it wakes by accident
 - `sites`: website names → address (e.g. `"github": "github.com"`), so "open github" works without spelling out the URL
 - `contacts`: names → email addresses (e.g. `"mom": "mom@example.com"`), so you can say "email mom" instead of spelling out the address
@@ -104,6 +105,7 @@ jarvis/            the assistant, run with `python -m jarvis`
     server.py      a small local server that reads and writes the settings files
     page.html      the page itself
 voices/            Piper voice files (downloaded by setup)
+wake_words/        your own wake word models (.onnx), if any
 data/              memory.json (created when Jarvis first remembers something)
 logs/              jarvis.log in debug mode, cleared on each launch
 ```

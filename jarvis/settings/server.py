@@ -19,11 +19,11 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .. import ROOT
-from ..config import DEFAULTS, Config
+from ..config import DEFAULTS, WAKE_WORDS, Config
 from ..ui.config import UiConfig
 
 PAGE = Path(__file__).with_name("page.html")
-WAKE_WORDS = ("hey_jarvis", "alexa", "hey_mycroft", "hey_rhasspy")   # openWakeWord's built-in wake words
+WAKE_WORD_DIR = ROOT / "wake_words"   # your own openWakeWord models (.onnx) go here
 CLOSE_SECONDS = 3       # after the page is closed; a reload comes back well within this
 MIC_IDLE_SECONDS = 2    # the microphone closes once the page stops asking for its level
 
@@ -133,11 +133,12 @@ class Server(ThreadingHTTPServer):
         ui_path = ROOT / (config or defaults["config"]).get("ui_config", defaults["config"]["ui_config"])
         ui, ui_problem = _read(ui_path)
         voices = sorted(p.name.removesuffix(".onnx") for p in (ROOT / "voices").glob("*.onnx"))
+        wake_words = [*WAKE_WORDS, *sorted(_show(p) for p in WAKE_WORD_DIR.glob("*.onnx"))]
         return {
             "config": config, "ui": ui, "defaults": defaults,
             "paths": {"config": _show(self.config_path), "ui": _show(ui_path)},
             "problems": [p for p in (config_problem, ui_problem) if p],
-            "models": _ollama_models(), "voices": voices, "wake_words": WAKE_WORDS,
+            "models": _ollama_models(), "voices": voices, "wake_words": wake_words,
         }
 
     def save(self, texts: dict) -> dict:

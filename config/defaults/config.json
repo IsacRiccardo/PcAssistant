@@ -13,7 +13,7 @@
   "temperature": 0.6,
   "max_tool_rounds": 3,
 
-  "wake_word": "hey_jarvis",
+  "wake_word": ["hey_jarvis"],
   "wake_threshold": 0.5,
   "whisper_model": "small",
   "languages": ["en"],
