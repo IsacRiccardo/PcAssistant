@@ -66,7 +66,9 @@ The orb's look lives in `config/ui.json`:
 
 - `width`, `height`, `margin`: overlay size and the gap above the taskbar; `orb_y`: orb centre from the top of the overlay
 - `fps`: animation smoothness. Speeds don't change with it, only how fluid the motion is
-- `opacity`, `fade_seconds`: how solid the orb is, and how long it takes to fade in or out
+- `opacity`: how solid the orb is
+- `fade_seconds`: how long the orb takes to appear. It springs in while its glow blooms, the sound bars grow out of the core and the rings sweep in last; going to sleep, the rings unwind and it sinks away a little quicker. The caption grows out of a small pill and springs to fit its text
+- `bounce`: 0 to 1, how much the orb and caption overshoot as they spring into place (0 glides in without any)
 - `mic_full_scale`: microphone loudness that fills the sound ring. Lower it if the ring barely moves when you talk
 - `bars`, `rings`: number of bars in the sound ring, and the spinning arcs around it (`radius`, `start` angle, arc `length` in degrees, line `width`, `speed` multiplier, negative spins backwards)
 - `colors`, `spin`: orb colour and ring speed (degrees per second) for each state: starting, sleeping, listening, thinking, speaking, error

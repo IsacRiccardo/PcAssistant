@@ -23,7 +23,8 @@ class UiConfig:
     orb_y: int             # orb centre, from the top of the overlay
     margin: int            # gap to the taskbar
     opacity: float         # overall opacity while visible
-    fade_seconds: float    # how long fading in or out takes
+    fade_seconds: float    # how long appearing takes; disappearing is a little quicker
+    bounce: float          # 0..1, how much the orb and caption overshoot as they spring into place
     mic_full_scale: float  # mic loudness (mean int16) that fills the sound ring
     bars: int              # bars in the sound ring around the core
     rings: tuple[Ring, ...]

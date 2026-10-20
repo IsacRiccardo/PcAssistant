@@ -5,7 +5,8 @@
   "orb_y": 120,
   "margin": 16,
   "opacity": 0.96,
-  "fade_seconds": 0.27,
+  "fade_seconds": 0.6,
+  "bounce": 0.4,
   "mic_full_scale": 4000,
 
   "bars": 56,

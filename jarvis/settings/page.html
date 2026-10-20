@@ -558,8 +558,10 @@ const SECTIONS = [
         help: "The orb's colour and how fast its rings spin (degrees per second, negative spins backwards) in each state. Click a state to preview it." },
       { key: "opacity", label: "Opacity", type: "slider", min: 0.05, max: 1, step: 0.01, ends: ["See-through", "Solid"],
         help: "How solid the orb is." },
-      { key: "fade_seconds", label: "Fade time", type: "slider", min: 0, max: 10, range: [0, 2], step: 0.01, unit: "s",
-        help: "How long the orb takes to fade in or out." },
+      { key: "fade_seconds", label: "Appear time", type: "slider", min: 0, max: 10, range: [0, 2], step: 0.01, unit: "s",
+        help: "How long the orb takes to appear: it springs in while its glow blooms, the sound bars grow out of the core and the rings sweep in last. Going to sleep is a little quicker. Click Sleeping, then another state, to watch it." },
+      { key: "bounce", label: "Bounce", type: "slider", min: 0, max: 1, step: 0.05, ends: ["Smooth", "Springy"],
+        help: "How much the orb and its caption overshoot as they spring into place. A little feels lively; 0 glides in without any." },
       { key: "bars", label: "Sound bars", type: "slider", min: 0, max: 720, range: [8, 160], step: 1, integer: true,
         help: "Bars in the sound ring around the core." },
       { key: "mic_full_scale", label: "Microphone full scale", type: "slider", min: 1, max: 32767, range: [500, 15000], step: 100,
@@ -1143,12 +1145,54 @@ const SAMPLES = {
   listening: ["Listening...", ""],
   thinking: ["Open Spotify and play something relaxing", ""],
   speaking: ["How's my battery?", "You're at 82 percent and charging, so no rush."],
-  error: ["Something went wrong (see logs/jarvis.log)", "Can't reach Ollama."],
+  error: ["Something went wrong (see the terminal)", "Can't reach Ollama."],
 };
 const rgbOf = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
 const hexOf = rgb => "#" + rgb.map(v => Math.round(v).toString(16).padStart(2, "0")).join("");
 const mixOf = (a, b, t) => hexOf(a.map((x, i) => x + (b[i] - x) * t));
 const clip = (text, n) => text.length <= n ? text : text.slice(0, n - 1).trimEnd() + "…";
+
+// Appearing and disappearing, and the caption bubble: the same motion as jarvis/ui/orb.py, keep them in step
+const START_SCALE = 0.6, END_SCALE = 0.85, OUT_SPEED = 0.7, PILL = [44, 26];
+const IN = { alpha: [0, 0.55], bars: [0.15, 0.6], sweep: [0.3, 0.7] };
+const OUT = { sweep: [0, 0.6], bars: [0.1, 0.6], alpha: [0.2, 0.8], scale: [0, 1] };
+const easeOut = x => 1 - (1 - x) ** 3, easeIn = x => x ** 3;
+const progress = (t, delay, span) => span <= 0 ? 1 : Math.min(Math.max((t - delay) / span, 0), 1);
+class Spring {
+  constructor(value) { this.value = value; this.velocity = 0; }
+  step(target, dt, seconds, bounce) {
+    if (seconds <= 0.02) { this.value = target; this.velocity = 0; return target; }
+    const omega = 9 / seconds, zeta = Math.max(0.2, 1 - Math.min(Math.max(bounce, 0), 1));
+    for (let i = 0; i < 4; i++) {
+      const h = dt / 4;
+      this.velocity += (-omega * omega * (this.value - target) - 2 * zeta * omega * this.velocity) * h;
+      this.value += this.velocity * h;
+    }
+    return this.value;
+  }
+}
+class Bubble {
+  constructor() { this.reset(); }
+  reset() { this.edges = null; this.rect = null; this.alpha = 0; this.clock = 0; this.texts = ["", ""]; this.born = [null, null]; }
+  step(target, pill, texts, dt, seconds, bounce) {
+    this.clock += dt;
+    texts.forEach((text, i) => {
+      const old = this.texts[i];
+      const growing = i === 1 && old && text.startsWith(old.replace(/…$/, "").slice(0, 20));
+      if (!text) this.born[i] = null;
+      else if (text !== old && !growing) this.born[i] = this.clock;
+    });
+    this.texts = [...texts];
+    if (!this.edges || (target && this.alpha < 0.02)) this.edges = pill.map(v => new Spring(v));
+    this.rect = this.edges.map((s, i) => s.step((target || pill)[i], dt, seconds, bounce));
+    this.alpha += ((target ? 1 : 0) - this.alpha) * (1 - Math.exp(-dt / 0.08));
+  }
+  line(i) {
+    if (this.born[i] === null) return [0, 0];
+    const a = easeOut(Math.min(Math.max((this.clock - this.born[i] - [0.08, 0.14][i]) / 0.3, 0), 1));
+    return [a, 6 * (1 - a)];
+  }
+}
 
 class OrbPreview {
   constructor(canvas) {
@@ -1163,6 +1207,40 @@ class OrbPreview {
     this.useMic = false;
     this.highlight = -1;
     this.timer = null;
+    this.shown = false;
+    this.since = 0;
+    this.parts = { alpha: 0, bars: 0, sweep: 0 };
+    this.fromParts = { ...this.parts };
+    this.fromScale = this.scale = START_SCALE;
+    this.spring = new Spring(START_SCALE);
+    this.bloom = 0;
+    this.asleepFor = 0;   // in Jarvis a sleeping orb stays hidden; here it comes back dimmed to show its colour
+    this.dim = 1;
+    this.bubble = new Bubble();
+  }
+  appear(shown, dt) {
+    const F = Math.max(0, this.n("fade_seconds")), bounce = this.n("bounce");
+    if (shown !== this.shown) {
+      this.shown = shown; this.since = 0;
+      this.fromParts = { ...this.parts }; this.fromScale = this.scale;
+      if (shown && this.parts.alpha === 0) this.spring = new Spring(START_SCALE);
+    } else this.since += dt;
+    if (shown) {
+      const t = F > 0 ? this.since / F : 1;
+      for (const [part, [delay, span]] of Object.entries(IN)) {
+        const start = this.fromParts[part];
+        this.parts[part] = start + (1 - start) * easeOut(progress(t, delay, span));
+      }
+      this.scale = this.spring.step(1, dt, F, bounce);
+      this.bloom = Math.sin(Math.PI * Math.min(t / 0.9, 1)) * (1 - this.fromParts.alpha);
+    } else {
+      const t = F > 0 ? this.since / (F * OUT_SPEED) : 1;
+      for (const [part, [delay, span]] of Object.entries(OUT))
+        if (part !== "scale") this.parts[part] = this.fromParts[part] * (1 - easeIn(progress(t, delay, span)));
+      this.scale = this.fromScale + (END_SCALE - this.fromScale) * easeIn(progress(t, ...OUT.scale));
+      this.spring.value = this.scale; this.spring.velocity = 0;
+      this.bloom = 0;
+    }
   }
   n(key) { return Number.isFinite(S.ui[key]) ? S.ui[key] : D.ui[key]; }
   setState(s) { this.state = s; this.onState?.(s); }
@@ -1217,11 +1295,17 @@ class OrbPreview {
     ctx.rect(PAD_X, PAD_TOP, w, height);
     ctx.clip();
     ctx.translate(PAD_X, PAD_TOP);
-    ctx.globalAlpha = Math.min(1, Math.max(0, this.n("opacity"))) * (state === "sleeping" ? 0.4 : 1);
 
     this.frame++;
-    const t = this.frame * BASE_FPS / fps, sec = t / BASE_FPS;
+    const t = this.frame * BASE_FPS / fps, sec = t / BASE_FPS, dt = 1 / fps;
     const ease = k => 1 - (1 - k) ** (BASE_FPS / fps);
+    const sleeping = state === "sleeping";
+    if (!sleeping) this.asleepFor = 0;
+    else if (this.parts.alpha === 0) this.asleepFor += dt;
+    this.appear(!sleeping || this.asleepFor > 0.6, dt);
+    this.dim += ((sleeping ? 0.4 : 1) - this.dim) * ease(0.15);
+    if (this.parts.alpha === 0) this.bubble.reset();
+    ctx.globalAlpha = Math.min(1, Math.max(0, this.n("opacity"))) * this.parts.alpha * this.dim;
     const colorFor = s => isHex(S.ui.colors?.[s]) ? S.ui.colors[s] : D.ui.colors[s];
     const target = rgbOf(colorFor(state));
     this.rgb = this.rgb ? this.rgb.map((a, i) => a + (target[i] - a) * ease(0.12)) : target;
@@ -1236,18 +1320,23 @@ class OrbPreview {
     const lv = this.level, m = w / 2, y = this.n("orb_y");
 
     const coreR = 28 + 18 * lv;
-    // soft light behind the core, brighter as it gets louder (as in jarvis/ui/hud.py)
-    const rgba = a => `rgba(${this.rgb.map(Math.round).join(",")},${a})`;
-    const glow = ctx.createRadialGradient(m, y, 0, m, y, coreR * 2.6);
-    glow.addColorStop(0, rgba(0.30 + 0.30 * lv));
-    glow.addColorStop(0.45, rgba(0.12 + 0.12 * lv));
+    ctx.save();   // the whole orb springs in and sinks away around its centre
+    ctx.translate(m, y);
+    ctx.scale(this.scale, this.scale);
+    ctx.translate(-m, -y);
+    // soft light behind the core: brighter as it gets louder, flaring up as the orb arrives (as in jarvis/ui/hud.py)
+    const rgba = a => `rgba(${this.rgb.map(Math.round).join(",")},${Math.min(1, a)})`;
+    const bloom = this.bloom, glowR = coreR * (2.6 + 0.8 * bloom);
+    const glow = ctx.createRadialGradient(m, y, 0, m, y, glowR);
+    glow.addColorStop(0, rgba((0.30 + 0.30 * lv) * (1 + 1.2 * bloom)));
+    glow.addColorStop(0.45, rgba((0.12 + 0.12 * lv) * (1 + 1.2 * bloom)));
     glow.addColorStop(1, rgba(0));
     ctx.fillStyle = glow;
     ctx.beginPath();
-    ctx.arc(m, y, coreR * 2.6, 0, Math.PI * 2);
+    ctx.arc(m, y, glowR, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.strokeStyle = rgba(0.8);
+    ctx.strokeStyle = rgba(0.8 * this.parts.bars);
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.arc(m, y, coreR + 5, 0, Math.PI * 2);
@@ -1271,6 +1360,7 @@ class OrbPreview {
       } else {
         length = 2;
       }
+      length *= this.parts.bars;
       const cos = Math.cos(a), sin = Math.sin(a);
       ctx.moveTo(m + inner * cos, y + inner * sin);
       ctx.lineTo(m + (inner + length) * cos, y + (inner + length) * sin);
@@ -1283,8 +1373,10 @@ class OrbPreview {
     const rings = Array.isArray(S.ui.rings) ? S.ui.rings : [];
     rings.forEach((r, i) => {
       if (![r.radius, r.start, r.length, r.width, r.speed].every(Number.isFinite) || r.radius <= 0 || r.width <= 0) return;
-      const start = (((r.start + this.angle * r.speed) % 360) + 360) % 360;
-      const a = -start * Math.PI / 180, b = -(start + r.length) * Math.PI / 180;
+      const turn = 90 * (1 - this.parts.sweep) * (this.shown ? -1 : 1), length = r.length * this.parts.sweep;
+      if (!length) return;
+      const start = (((r.start + this.angle * r.speed + turn) % 360) + 360) % 360;
+      const a = -start * Math.PI / 180, b = -(start + length) * Math.PI / 180;
       ctx.lineWidth = r.width;
       ctx.strokeStyle = i === this.highlight ? "#ffffff" : color;
       ctx.shadowColor = i === this.highlight ? "#ffffff" : "transparent";
@@ -1302,6 +1394,7 @@ class OrbPreview {
     ctx.lineWidth = 2;
     ctx.strokeStyle = color;
     ctx.stroke();
+    ctx.restore();
 
     let outer = Math.max(...rings.map(r => r.radius).filter(Number.isFinite));
     if (!Number.isFinite(outer)) outer = 95;
@@ -1322,13 +1415,17 @@ class OrbPreview {
   drawCaption(ctx, w, top, errorColor) {
     const [you, reply] = SAMPLES[this.state];
     const family = `"${S.ui.font || "Segoe UI"}", "Segoe UI", sans-serif`;
+    const texts = [clip(you, 90), clip(reply, 160)];
     const parts = [
-      [clip(you, 90), this.n("heard_font_size"), isHex(S.ui.heard_color) ? S.ui.heard_color : D.ui.heard_color],
-      [clip(reply, 160), this.n("reply_font_size"), this.state === "error" ? errorColor : isHex(S.ui.reply_color) ? S.ui.reply_color : D.ui.reply_color],
+      [texts[0], this.n("heard_font_size"), isHex(S.ui.heard_color) ? S.ui.heard_color : D.ui.heard_color, 0],
+      [texts[1], this.n("reply_font_size"), this.state === "error" ? errorColor : isHex(S.ui.reply_color) ? S.ui.reply_color : D.ui.reply_color, 1],
     ].filter(p => p[0]);
-    if (!parts.length) return;
+    const pill = [w / 2 - PILL[0] / 2, top - 10, w / 2 + PILL[0] / 2, top - 10 + PILL[1]];
+    const step = target => this.bubble.step(target, pill, texts, 1 / Math.max(1, this.n("fps")),
+                                            Math.max(0, this.n("fade_seconds")), this.n("bounce"));
+    if (!parts.length) { step(null); return this.drawBubble(ctx, [], w, family); }
     let y = top, widest = 0;
-    const laid = parts.map(([text, pt, color], i) => {
+    const laid = parts.map(([text, pt, color, index], i) => {
       const px = pt * 96 / 72, lineH = Math.round(px * 1.33);
       ctx.font = `${px}px ${family}`;
       const lines = this.wrap(ctx, text, w - 48);
@@ -1336,20 +1433,34 @@ class OrbPreview {
       if (i > 0) y += 4;
       const at = y;
       y += lines.length * lineH;
-      return { lines, px, lineH, color, at };
+      return { lines, px, lineH, color, at, index };
     });
-    const x1 = w / 2 - widest / 2 - 14, x2 = w / 2 + widest / 2 + 14, y1 = top - 10, y2 = y + 10, r = 14;
+    // going to sleep, the caption shrinks back into its pill while the orb leaves
+    step(this.shown ? [w / 2 - widest / 2 - 14, top - 10, w / 2 + widest / 2 + 14, y + 10] : null);
+    this.drawBubble(ctx, laid, w, family);
+  }
+  drawBubble(ctx, laid, w, family) {
+    // the bubble as it springs to fit, and each line as it rises into place (as in jarvis/ui/hud.py)
+    const b = this.bubble;
+    if (!b.rect || b.alpha < 0.01) return;
+    const [x1, y1, x2, y2] = b.rect, bw = Math.max(0, x2 - x1), bh = Math.max(0, y2 - y1);
+    const base = ctx.globalAlpha;
+    ctx.globalAlpha = base * b.alpha;
     ctx.fillStyle = isHex(S.ui.panel_color) ? S.ui.panel_color : D.ui.panel_color;
     ctx.beginPath();
-    ctx.roundRect(x1, y1, x2 - x1, y2 - y1, r);
+    ctx.roundRect(x1, y1, bw, bh, Math.min(14, bh / 2, bw / 2));
     ctx.fill();
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     for (const p of laid) {
+      const [alpha, below] = b.line(p.index);
+      if (alpha <= 0) continue;
+      ctx.globalAlpha = base * alpha * b.alpha ** 3;   // text goes before its bubble does
       ctx.font = `${p.px}px ${family}`;
       ctx.fillStyle = p.color;
-      p.lines.forEach((l, i) => ctx.fillText(l, w / 2, p.at + i * p.lineH));
+      p.lines.forEach((l, i) => ctx.fillText(l, w / 2, p.at + below + i * p.lineH));
     }
+    ctx.globalAlpha = base;
   }
 }
 let preview = null;

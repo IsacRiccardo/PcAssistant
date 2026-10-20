@@ -15,10 +15,11 @@ from PySide6.QtGui import QColor, QFont, QFontMetricsF, QGuiApplication, QPainte
 from PySide6.QtWidgets import QApplication, QWidget
 
 from .config import UiConfig
-from .orb import Orb
+from .orb import Bubble, Orb
 
 CAPTION_FLAGS = Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap
 CAPTION_SIDES = 24      # space left and right of the caption text
+PILL = (44, 26)         # size of the small bubble the caption grows out of
 
 log = logging.getLogger("jarvis")
 
@@ -43,6 +44,7 @@ class Hud(Orb):
         self.drawn = "starting"              # the state of the frame the window paints
         self.fonts = (_font(cfg.font, cfg.heard_font_size), _font(cfg.font, cfg.reply_font_size))
         self._layout_key, self._layout = None, None
+        self.bubble = Bubble()
 
     def run(self, work) -> None:
         """Run work() on a background thread and animate the overlay until Ctrl+C."""
@@ -69,8 +71,16 @@ class Hud(Orb):
         self.drawn = self.step()
         if self.alpha != alpha:
             self.window.setWindowOpacity(self.alpha)
-        if self.alpha > 0:
-            self.window.update()             # repaint on the next pass of the event loop
+        if self.alpha == 0:
+            self.bubble.reset()              # so the caption grows out of its pill again next time
+            return
+        cfg, m, y = self.cfg, self.cfg.width / 2, self.caption_y
+        panel, _ = self._caption_layout(self.drawn)
+        # going to sleep, the caption shrinks back into its pill while the orb leaves
+        target = (panel.left(), panel.top(), panel.right(), panel.bottom()) if panel and self.shown else None
+        pill = (m - PILL[0] / 2, y - 10, m + PILL[0] / 2, y - 10 + PILL[1])
+        self.bubble.step(target, pill, self.caption(self.drawn), 1 / cfg.fps, cfg.fade_seconds, cfg.bounce)
+        self.window.update()                 # repaint on the next pass of the event loop
 
     def paint(self, p: QPainter):
         cfg, m, y = self.cfg, self.cfg.width / 2, self.cfg.orb_y
@@ -78,17 +88,23 @@ class Hud(Orb):
         self._paint_caption(p, self.drawn)
         center, color, lv = QPointF(m, y), self.color, self.level
         core_r = self.core_radius
+        p.translate(center)                  # the whole orb springs in and sinks away around its centre
+        p.scale(self.scale, self.scale)
+        p.translate(-center)
 
-        glow = QRadialGradient(center, core_r * 2.6)   # soft light behind the core, brighter as it gets louder
-        glow.setColorAt(0.0, _color(color, 0.30 + 0.30 * lv))
-        glow.setColorAt(0.45, _color(color, 0.12 + 0.12 * lv))
+        # soft light behind the core: brighter as it gets louder, and flaring up as the orb arrives
+        bloom = self.bloom
+        glow_r = core_r * (2.6 + 0.8 * bloom)
+        glow = QRadialGradient(center, glow_r)
+        glow.setColorAt(0.0, _color(color, min(1.0, (0.30 + 0.30 * lv) * (1 + 1.2 * bloom))))
+        glow.setColorAt(0.45, _color(color, min(1.0, (0.12 + 0.12 * lv) * (1 + 1.2 * bloom))))
         glow.setColorAt(1.0, _color(color, 0.0))
         p.setPen(Qt.NoPen)
         p.setBrush(glow)
-        p.drawEllipse(center, core_r * 2.6, core_r * 2.6)
+        p.drawEllipse(center, glow_r, glow_r)
 
         p.setBrush(Qt.NoBrush)
-        p.setPen(QPen(_color(color, 0.8), 1))
+        p.setPen(QPen(_color(color, 0.8 * self.parts["bars"]), 1))
         p.drawEllipse(center, core_r + 5, core_r + 5)
 
         p.setPen(QPen(_color(color), 3, Qt.SolidLine, Qt.RoundCap))
@@ -99,9 +115,12 @@ class Hud(Orb):
                        QPointF(m + (inner + length) * cos, y + (inner + length) * sin))
 
         for ring in cfg.rings:   # angles in 1/16 degree, counter-clockwise from 3 o'clock
+            length = round(self.ring_length(ring.length) * 16)
+            if not length:
+                continue
             p.setPen(QPen(_color(color), ring.width, Qt.SolidLine, Qt.FlatCap))
             p.drawArc(QRectF(m - ring.radius, y - ring.radius, 2 * ring.radius, 2 * ring.radius),
-                      round(self.ring_start(ring.start, ring.speed) * 16), round(ring.length * 16))
+                      round(self.ring_start(ring.start, ring.speed) * 16), length)
 
         p.setPen(QPen(_color(color), 2))
         p.setBrush(_color(self.core_color))
@@ -114,33 +133,41 @@ class Hud(Orb):
             cfg, y = self.cfg, self.caption_y
             width = cfg.width - 2 * CAPTION_SIDES
             lines = []
-            for text, font, color in zip(self.caption(state), self.fonts,
-                                         (cfg.heard_color, cfg.colors["error"] if state == "error" else cfg.reply_color)):
+            for i, (text, font, color) in enumerate(zip(
+                    self.caption(state), self.fonts,
+                    (cfg.heard_color, cfg.colors["error"] if state == "error" else cfg.reply_color))):
                 if not text:
                     continue
                 box = QFontMetricsF(font).boundingRect(QRectF(CAPTION_SIDES, y, width, 10_000), CAPTION_FLAGS, text)
-                lines.append((QRectF(CAPTION_SIDES, y, width, box.height()), box, text, font, color))
+                lines.append((i, QRectF(CAPTION_SIDES, y, width, box.height()), box, text, font, color))
                 y = box.bottom() + 4
             panel = None
             if lines:
-                panel = lines[0][1]
+                panel = lines[0][2]
                 for line in lines[1:]:
-                    panel = panel.united(line[1])
+                    panel = panel.united(line[2])
                 panel = panel.adjusted(-14, -10, 14, 10)
             self._layout_key, self._layout = key, (panel, lines)
         return self._layout
 
     def _paint_caption(self, p: QPainter, state: str):
-        panel, lines = self._caption_layout(state)
-        if panel is None:
+        """The bubble as it springs to fit, and each line as it rises into place."""
+        bubble = self.bubble
+        if bubble.rect is None or bubble.alpha < 0.01:
             return
+        left, top, right, bottom = bubble.rect
+        panel = QRectF(left, top, max(right - left, 0), max(bottom - top, 0))
+        radius = min(14, panel.height() / 2, panel.width() / 2)   # a pill while it's small
         p.setPen(Qt.NoPen)
-        p.setBrush(_color(self.cfg.panel_color))
-        p.drawRoundedRect(panel, 14, 14)
-        for rect, _, text, font, color in lines:
+        p.setBrush(_color(self.cfg.panel_color, bubble.alpha))
+        p.drawRoundedRect(panel, radius, radius)
+        for i, rect, _, text, font, color in self._caption_layout(state)[1]:
+            alpha, below = bubble.line(i)
+            if alpha <= 0:
+                continue
             p.setFont(font)
-            p.setPen(_color(color))
-            p.drawText(rect, CAPTION_FLAGS, text)
+            p.setPen(_color(color, alpha * bubble.alpha ** 3))   # text goes before its bubble does
+            p.drawText(rect.translated(0, below), CAPTION_FLAGS, text)
 
 
 class _Window(QWidget):
