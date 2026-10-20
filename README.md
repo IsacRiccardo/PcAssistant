@@ -13,7 +13,7 @@ Runs fully offline on your laptop: wake word (openWakeWord) → speech to text (
 ## Running
 
 - **Terminal > Run Task... > Run Jarvis (text mode)**: type to it. Test this first.
-- **Terminal > Run Task... > Run Jarvis (voice)**: say "Hey Jarvis", wait for it to answer "Yes?", then talk. After each reply it keeps listening, so you can give the next command without the wake word. It goes back to sleep (low beep) once you stay quiet for `follow_up_seconds` or say "that's all".
+- **Terminal > Run Task... > Run Jarvis (voice)**: say "Hey Jarvis", wait for it to answer "Yes?", then talk. After each reply it keeps listening, so you can give the next command without the wake word. It goes back to sleep (it says "Going to sleep.") once you stay quiet for `follow_up_seconds` or say "that's all".
   When Jarvis wakes up, an animated orb fades in at the bottom centre of the screen, just above the taskbar, floating over whatever is on screen. It reacts to your voice while listening, spins while thinking and pulses with Jarvis's voice while speaking, with a caption of what you said and the reply. It fades away when Jarvis goes back to sleep. Clicks pass straight through it and it never takes keyboard focus, so it can't get in your way. To quit, say "shut down" while Jarvis is listening (or press Ctrl+C in the terminal, or close it). Run `python -m jarvis --no-ui` for voice mode without the orb.
 - Or press **F5** and pick a configuration to run with the debugger.
 
@@ -58,7 +58,8 @@ Or edit the files by hand. Everything is in `config/config.json`:
 - `contacts`: names → email addresses (e.g. `"mom": "mom@example.com"`), so you can say "email mom" instead of spelling out the address
 - `browsers`: browsers Jarvis can open sites or new tabs in (command, flags before the URL, blank new-tab page)
 - `tool_words`: for each tool, the words that offer it to the model (`"battery_status": ["battery", "charging"]`). Jarvis only offers the tools whose words your request contains as whole words, in simple forms too ("share" also matches "shares", "rain" matches "raining"), so small talk stays fast and the model picks from just a few. Add a word if a request should trigger a tool but doesn't; an empty list turns the tool off
-- `wake_beep`, `sleep_beep`: the beeps when Jarvis wakes up (only with no `wake_reply`) and goes back to sleep (pitch in `hz`, length in `ms`)
+- `wake_beep`, `sleep_beep`: the beeps when Jarvis wakes up and goes back to sleep, when it has no `wake_reply` or `sleep_reply` to say (pitch in `hz`, length in `ms`)
+- `sleep_reply`: what Jarvis says when it goes back to sleep, one picked at random (`["Going to sleep.", "Call me if you need me."]`). An empty list plays `sleep_beep` instead
 - `beep_grace_seconds`: how long to ignore the mic after the wake beep, so its echo doesn't start a recording
 - `memory_file`, `log_dir`: where memories and logs are kept, relative to the project folder
 - `ui_config`: the file with the orb's look, relative to the project folder (see below)

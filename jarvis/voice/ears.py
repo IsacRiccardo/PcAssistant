@@ -139,10 +139,12 @@ class Ears:
             wait = self.cfg.follow_up_seconds
 
     def listen_until_shutdown(self, on_command: Callable[[str, str], None], on_sleep: Callable[[], None],
-                              dictating: Callable[[], bool], on_wake: Callable[[], None] | None = None) -> None:
+                              dictating: Callable[[], bool], wake_reply: Callable[[], None] | None = None,
+                              sleep_reply: Callable[[], None] | None = None) -> None:
         """on_command(text, language) handles each request, on_sleep() runs when a conversation ends,
-        dictating() is True while the user is answering a question like the email ones, and on_wake()
-        answers the wake word (a short beep without it)."""
+        dictating() is True while the user is answering a question like the email ones.
+        wake_reply() answers the wake word, sleep_reply() says Jarvis is going back to sleep; without
+        them, a short beep."""
         phrase = " or ".join(f'"{wake_phrase(w)}"' for w in self.cfg.wake_word)
         with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="int16",
                             blocksize=CHUNK, callback=self._on_audio):
@@ -153,8 +155,8 @@ class Ears:
                 scores = self.wake.predict(chunk)
                 if max(scores.values()) < self.cfg.wake_threshold:
                     continue
-                if on_wake:
-                    on_wake()
+                if wake_reply:
+                    wake_reply()
                 else:
                     winsound.Beep(*self.cfg.wake_beep)
                 self._drain()       # ignore the wake word's tail, and Jarvis's own answer to it
@@ -162,8 +164,11 @@ class Ears:
                     log.info("Shutdown requested")
                     return
                 on_sleep()
+                if sleep_reply:
+                    sleep_reply()   # said while the orb is still up; it leaves right after
                 self.status.set_state("sleeping")
-                winsound.Beep(*self.cfg.sleep_beep)
+                if not sleep_reply:
+                    winsound.Beep(*self.cfg.sleep_beep)
                 print(f"(sleeping - say {phrase})", flush=True)
                 self._drain()
                 self.wake.reset()

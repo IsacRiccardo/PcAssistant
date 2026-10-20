@@ -99,7 +99,7 @@ def run_voice(cfg: Config, brain: Brain, no_ui: bool) -> None:
             # speech models load while the greeting plays (loading both at once only competes for the CPU)
             loading = pool.submit(Ears, cfg, status)
             mouth.say(cfg.greeting)
-            mouth.prepare(cfg.wake_reply)
+            mouth.prepare(cfg.wake_reply + cfg.sleep_reply)
             ears = loading.result()
 
         def answer(text: str, language: str) -> None:
@@ -108,8 +108,12 @@ def run_voice(cfg: Config, brain: Brain, no_ui: bool) -> None:
         def answer_wake_word() -> None:
             mouth.say(random.choice(cfg.wake_reply))
 
+        def say_going_to_sleep() -> None:
+            mouth.say(random.choice(cfg.sleep_reply))
+
         ears.listen_until_shutdown(answer, on_sleep=brain.end_conversation, dictating=lambda: brain.dictating,
-                                   on_wake=answer_wake_word if cfg.wake_reply else None)   # None: a beep
+                                   wake_reply=answer_wake_word if cfg.wake_reply else None,   # None: a beep
+                                   sleep_reply=say_going_to_sleep if cfg.sleep_reply else None)
         mouth.say(cfg.farewell)
         status.close()
 

@@ -26,6 +26,7 @@
   "max_command_seconds": 20,
   "wake_beep": { "hz": 880, "ms": 120 },
   "sleep_beep": { "hz": 440, "ms": 120 },
+  "sleep_reply": ["Going to sleep."],
   "beep_grace_seconds": 0.3,
   "sleep_phrases": [
     "that's all", "that is all", "stop listening", "go to sleep", "goodbye", "never mind"

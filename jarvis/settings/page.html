@@ -519,7 +519,7 @@ const SECTIONS = [
     ] },
     { title: "Beeps", fields: [
       { key: "wake_beep", label: "Wake beep", type: "beep", help: "Plays when Jarvis wakes up, if it has no reply to say (Reply when woken, above)." },
-      { key: "sleep_beep", label: "Sleep beep", type: "beep", help: "Plays when Jarvis goes back to sleep." },
+      { key: "sleep_beep", label: "Sleep beep", type: "beep", help: "Plays when Jarvis goes back to sleep, if it has nothing to say (Commands > Reply when going to sleep)." },
       { key: "beep_grace_seconds", label: "Ignore the microphone after the beep", type: "slider", min: 0, max: 5, range: [0, 2], step: 0.05, unit: "s",
         help: "So the beep's own echo doesn't start a recording." },
     ] },
@@ -528,6 +528,8 @@ const SECTIONS = [
     { fields: [
       { key: "sleep_phrases", label: "Go back to sleep", type: "chips", placeholder: "Add a phrase…",
         help: "Saying one of these ends the conversation right away, so Jarvis waits for the wake word again." },
+      { key: "sleep_reply", label: "Reply when going to sleep", type: "chips", placeholder: "Add a reply…",
+        help: "What Jarvis says when it goes back to sleep, one picked at random, like \"Going to sleep.\" or \"Call me if you need me.\" That happens after one of the phrases above, or when you stay quiet. Leave this empty for a short beep instead (Listening > Beeps > Sleep beep)." },
       { key: "shutdown_phrases", label: "Shut down", type: "chips", placeholder: "Add a phrase…",
         help: "These stop Jarvis completely. They only count as a short command on its own (5 words or fewer), so \"shut down\" works but a longer sentence containing it doesn't." },
       { key: "tool_words", label: "Action words", type: "toolwords", placeholder: "Add a word…",

@@ -75,6 +75,7 @@ class Config:
     max_command_seconds: float
     wake_beep: tuple[int, int]      # (Hz, ms)
     sleep_beep: tuple[int, int]
+    sleep_reply: tuple[str, ...]    # said when Jarvis goes back to sleep (one at random); empty: the sleep beep
     beep_grace_seconds: float
     sleep_phrases: tuple[str, ...]
     shutdown_phrases: tuple[str, ...]
@@ -114,5 +115,6 @@ class Config:
         data["tool_words"] = {k: tuple(words(w) for w in v) for k, v in data["tool_words"].items()}
         data["languages"] = tuple(lang.strip().lower() for lang in data["languages"])
         data["piper_voices"] = tuple(data["piper_voices"])
-        data["wake_reply"] = tuple(r.strip() for r in data["wake_reply"] if r.strip())
+        for key in ("wake_reply", "sleep_reply"):
+            data[key] = tuple(r.strip() for r in data[key] if r.strip())
         return cls(**data)
