@@ -7,6 +7,7 @@ Add --debug to any of them to write everything to logs/jarvis.log.
 import argparse
 import logging
 import os
+import random
 import sys
 import threading
 import warnings
@@ -98,10 +99,12 @@ def run_voice(cfg: Config, brain: Brain, no_ui: bool) -> None:
             # speech models load while the greeting plays (loading both at once only competes for the CPU)
             ears = pool.submit(Ears, cfg, status)
             mouth.say(cfg.greeting)
+            mouth.prepare(cfg.wake_reply)
             ears = ears.result()
         ears.listen_until_shutdown(lambda text, language: mouth.say(brain.reply(text, language), language),
                                    on_sleep=brain.end_conversation,
-                                   dictating=lambda: brain.dictating)
+                                   dictating=lambda: brain.dictating,
+                                   on_wake=(lambda: mouth.say(random.choice(cfg.wake_reply))) if cfg.wake_reply else None)
         mouth.say(cfg.farewell)
         status.close()
 

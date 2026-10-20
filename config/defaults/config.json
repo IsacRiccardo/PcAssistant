@@ -15,6 +15,7 @@
 
   "wake_word": ["hey_jarvis"],
   "wake_threshold": 0.5,
+  "wake_reply": ["Yes?"],
   "whisper_model": "small",
   "languages": ["en"],
 

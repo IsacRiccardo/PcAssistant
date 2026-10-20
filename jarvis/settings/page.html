@@ -492,6 +492,8 @@ const SECTIONS = [
       { key: "wake_threshold", label: "Wake sensitivity", type: "slider", min: 0.05, max: 0.99, range: [0.1, 0.95], step: 0.05,
         ends: ["Wakes easily", "Fewer false wake-ups"],
         help: "Lower it (0.3) if Jarvis doesn't hear you; raise it (0.7) if it wakes up by accident." },
+      { key: "wake_reply", label: "Reply when woken", type: "chips", placeholder: "Add a reply…",
+        help: "What Jarvis says when it hears the wake word, one picked at random, like \"Yes?\" or \"Yes, sir?\". Give your command once it has finished. Keep them short, since it listens only after it has spoken. Leave this empty for a short beep instead (Wake beep, below)." },
     ] },
     { title: "Understanding speech", fields: [
       { key: "whisper_model", label: "Speech recognition model", type: "pick", options: WHISPER, required: true,
@@ -516,7 +518,7 @@ const SECTIONS = [
         help: "Recording stops after this long, even if you're still talking." },
     ] },
     { title: "Beeps", fields: [
-      { key: "wake_beep", label: "Wake beep", type: "beep", help: "Plays when Jarvis wakes up." },
+      { key: "wake_beep", label: "Wake beep", type: "beep", help: "Plays when Jarvis wakes up, if it has no reply to say (Reply when woken, above)." },
       { key: "sleep_beep", label: "Sleep beep", type: "beep", help: "Plays when Jarvis goes back to sleep." },
       { key: "beep_grace_seconds", label: "Ignore the microphone after the beep", type: "slider", min: 0, max: 5, range: [0, 2], step: 0.05, unit: "s",
         help: "So the beep's own echo doesn't start a recording." },

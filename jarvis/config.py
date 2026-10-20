@@ -65,6 +65,7 @@ class Config:
     # hearing
     wake_word: tuple[str, ...]      # built-in names or paths to .onnx models; any of them wakes Jarvis
     wake_threshold: float
+    wake_reply: tuple[str, ...]     # said when the wake word is heard (one at random); empty: the wake beep
     whisper_model: str
     languages: tuple[str, ...]      # what the user speaks, e.g. ('en', 'de'); empty: any language
     silence_level: float
@@ -113,4 +114,5 @@ class Config:
         data["tool_words"] = {k: tuple(words(w) for w in v) for k, v in data["tool_words"].items()}
         data["languages"] = tuple(lang.strip().lower() for lang in data["languages"])
         data["piper_voices"] = tuple(data["piper_voices"])
+        data["wake_reply"] = tuple(r.strip() for r in data["wake_reply"] if r.strip())
         return cls(**data)

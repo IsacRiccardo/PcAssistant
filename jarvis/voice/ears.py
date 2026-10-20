@@ -137,9 +137,10 @@ class Ears:
             wait = self.cfg.follow_up_seconds
 
     def listen_until_shutdown(self, on_command: Callable[[str, str], None], on_sleep: Callable[[], None],
-                              dictating: Callable[[], bool]) -> None:
+                              dictating: Callable[[], bool], on_wake: Callable[[], None] | None = None) -> None:
         """on_command(text, language) handles each request, on_sleep() runs when a conversation ends,
-        dictating() is True while the user is answering a question like the email ones."""
+        dictating() is True while the user is answering a question like the email ones, and on_wake()
+        answers the wake word (a short beep without it)."""
         phrase = " or ".join(f'"{wake_phrase(w)}"' for w in self.cfg.wake_word)
         with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="int16",
                             blocksize=CHUNK, callback=self._callback):
@@ -150,8 +151,11 @@ class Ears:
                 scores = self.wake.predict(chunk)
                 if max(scores.values()) < self.cfg.wake_threshold:
                     continue
-                winsound.Beep(*self.cfg.wake_beep)
-                self._drain()
+                if on_wake:
+                    on_wake()
+                else:
+                    winsound.Beep(*self.cfg.wake_beep)
+                self._drain()       # ignore the wake word's tail, and Jarvis's own answer to it
                 if self.converse(on_command, dictating):
                     log.info("Shutdown requested")
                     return

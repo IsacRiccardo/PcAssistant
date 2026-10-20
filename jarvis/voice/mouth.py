@@ -15,12 +15,24 @@ from ..ui import Status
 log = logging.getLogger("jarvis")
 
 VOICE_LEVEL_FPS = 30    # how often Jarvis's own loudness is sent to the window while speaking
+SILENCE = 500           # int16 level below which synthesized audio counts as silence
+KEEP_SILENCE = 0.02     # seconds of it left before and after trimmed speech
+
+
+def _trim(data: np.ndarray, rate: int) -> np.ndarray:
+    """Speech without the silence around it, but for a short margin so it doesn't sound clipped."""
+    loud = np.flatnonzero(np.abs(data.astype(np.int32)) > SILENCE)
+    if not len(loud):
+        return data
+    keep = int(KEEP_SILENCE * rate)
+    return data[max(loud[0] - keep, 0):loud[-1] + keep]
 
 
 class Mouth:
     def __init__(self, cfg: Config, status: Status):
         self.status = status
         self.voices = {}    # language -> Piper voice, in the order of piper_voices
+        self.ready = {}     # text -> its audio, synthesized in advance so short fixed replies start at once
         self.engine = None
         try:
             from piper import PiperVoice
@@ -62,6 +74,16 @@ class Mouth:
         log.info("Jarvis: %s", reply)
         return reply
 
+    def prepare(self, texts: Iterable[str]) -> None:
+        """Synthesize these now, in the first voice, so saying them later doesn't wait for Piper.
+        Piper pads speech with silence; trimmed, a short reply like "Yes?" ends sooner, and Jarvis
+        starts listening sooner after it."""
+        if self.voices:
+            voice = next(iter(self.voices.values()))
+            for text in texts:
+                self.ready[text] = [(_trim(c.audio_int16_array, c.sample_rate), c.sample_rate)
+                                    for c in voice.synthesize(text)]
+
     def _speak(self, text: str, language: str | None) -> None:
         if not self.voices:
             self.status.set_state("speaking")
@@ -69,8 +91,9 @@ class Mouth:
             self.engine.runAndWait()
             return
         voice = self.voices.get(language) or next(iter(self.voices.values()))
-        for chunk in voice.synthesize(text):   # one chunk per sentence
-            data, rate = chunk.audio_int16_array, chunk.sample_rate
+        ready = self.ready.get(text) if language is None else None
+        chunks = ready or ((c.audio_int16_array, c.sample_rate) for c in voice.synthesize(text))   # one per sentence
+        for data, rate in chunks:
             self.status.set_state("speaking")
             sd.play(data, rate)
             self._follow_loudness(data, rate)
