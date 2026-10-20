@@ -17,6 +17,24 @@
       "module": "jarvis",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Jarvis (text mode, debug log)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "jarvis",
+      "args": ["--text", "--debug"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Jarvis (voice, debug log)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "jarvis",
+      "args": ["--debug"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}"
     }
   ]
 }

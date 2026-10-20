@@ -2,12 +2,14 @@
 Run:   python -m jarvis          (voice mode with the animated window, say "hey jarvis")
        python -m jarvis --no-ui  (voice mode, terminal only)
        python -m jarvis --text   (type instead of talk, good for testing)
+Add --debug to any of them to write everything to logs/jarvis.log.
 """
 import argparse
 import logging
 import os
 import sys
 import threading
+import warnings
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -23,17 +25,23 @@ from .tools import Tools
 log = logging.getLogger("jarvis")
 
 
-def setup_logging(log_dir: Path) -> None:
-    """Everything except Jarvis's replies goes to the log file, keeping the terminal clean."""
-    log_dir.mkdir(parents=True, exist_ok=True)
-    logging.basicConfig(
-        filename=log_dir / "jarvis.log",
-        filemode="w",                                     # start a fresh log each launch
-        encoding="utf-8",
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
-    logging.captureWarnings(True)                         # library warnings -> log file
+def setup_logging(log_dir: Path, debug: bool) -> None:
+    """Warnings and errors always show on the terminal. With debug, everything (tool calls, status,
+    the full conversation) also goes to the log file; without it nothing is written to disk."""
+    to_terminal = logging.StreamHandler()
+    to_terminal.setLevel(logging.WARNING)
+    to_terminal.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+    to_terminal.addFilter(lambda record: record.name != "py.warnings")   # library warnings stay off the terminal
+    handlers = [to_terminal]
+    if debug:
+        log_dir.mkdir(parents=True, exist_ok=True)
+        to_file = logging.FileHandler(log_dir / "jarvis.log", mode="w", encoding="utf-8")   # fresh log each launch
+        to_file.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+        handlers.append(to_file)
+        logging.captureWarnings(True)                     # library warnings -> log file
+    else:
+        warnings.simplefilter("ignore")                   # library warnings would only clutter the terminal
+    logging.basicConfig(level=logging.INFO, handlers=handlers)
     for noisy in ("httpx", "httpcore"):                   # skip one line per Ollama request
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
@@ -42,9 +50,7 @@ def check_ollama() -> None:
     try:
         ollama.list()
     except Exception:
-        msg = "Can't reach Ollama. Open the Ollama app (or run 'ollama serve') and try again."
-        log.error(msg)
-        print(msg, file=sys.stderr)  # fatal, so it still shows on the terminal
+        log.error("Can't reach Ollama. Open the Ollama app (or run 'ollama serve') and try again.")
         sys.exit(1)
 
 
@@ -113,12 +119,13 @@ def main():
     parser.add_argument("--no-ui", action="store_true", help="voice mode without the animated window")
     parser.add_argument("--config", type=Path, default=ROOT / "config" / "config.json",
                         help="settings file (default: config/config.json)")
+    parser.add_argument("--debug", action="store_true", help="write a detailed log to the log folder")
     args = parser.parse_args()
     # a terminal shows accented letters anyway, but redirected output would fall back to a code page without them
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
     cfg = Config.load(args.config)
-    setup_logging(cfg.log_dir)
+    setup_logging(cfg.log_dir, args.debug)
     check_ollama()
 
     memory = Memory(cfg.memory_file)

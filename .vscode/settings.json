@@ -14,6 +14,14 @@
       "task": "Run Jarvis (text mode)"
     },
     {
+      "label": "Run Jarvis (voice, debug log)",
+      "task": "Run Jarvis (voice, debug log)"
+    },
+    {
+      "label": "Run Jarvis (text mode, debug log)",
+      "task": "Run Jarvis (text mode, debug log)"
+    },
+    {
       "label": "Configure Jarvis",
       "task": "Configure Jarvis (settings)"
     }

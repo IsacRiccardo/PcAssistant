@@ -12,7 +12,6 @@ import logging
 import math
 import random
 import signal
-import sys
 import threading
 import tkinter as tk
 
@@ -124,8 +123,7 @@ class Hud(Status):
             try:
                 work()
             except Exception as e:
-                log.exception("Voice loop crashed")
-                print(f"Error: {e}", file=sys.stderr)
+                log.exception("Voice loop crashed")   # shows on the terminal too
                 self.reply, self.state = str(e), "error"
 
         threading.Thread(target=guarded, daemon=True).start()

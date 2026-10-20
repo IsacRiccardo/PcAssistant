@@ -17,6 +17,8 @@ Runs fully offline on your laptop: wake word (openWakeWord) → speech to text (
   When Jarvis wakes up, an animated orb fades in at the bottom centre of the screen, just above the taskbar, floating over whatever is on screen. It reacts to your voice while listening, spins while thinking and pulses with Jarvis's voice while speaking, with a caption of what you said and the reply. It fades away when Jarvis goes back to sleep. Clicks pass straight through it and it never takes keyboard focus, so it can't get in your way. To quit, say "shut down" while Jarvis is listening (or press Ctrl+C in the terminal, or close it). Run `python -m jarvis --no-ui` for voice mode without the orb.
 - Or press **F5** and pick a configuration to run with the debugger.
 
+The tasks and F5 configurations marked "debug log" also write a detailed log to `logs/jarvis.log`.
+
 Plug the laptop in. On battery Jarvis switches to the smaller 1B model automatically.
 
 ## Try saying
@@ -73,7 +75,7 @@ Every key in both files is required; if one is missing Jarvis tells you which on
 
 New abilities: write a function with a clear docstring in one of the modules in `jarvis/tools/` and add it to the list in `Tools.__init__` (`jarvis/tools/__init__.py`). Then give it its words in `tool_words`, in `config/defaults/config.json` and your own `config/config.json` (Jarvis tells you on startup if you forget), and a name on the settings page in `TOOL_LABELS` (`jarvis/settings/page.html`). The model decides when to call it.
 
-Memories are stored in `data/memory.json`. Delete the file to wipe them. Logs (tool calls, status, full conversation) go to `logs/jarvis.log`, which is cleared on each launch.
+Memories are stored in `data/memory.json`. Delete the file to wipe them. Logging is off unless you start Jarvis with a "debug log" task or F5 configuration, or add `--debug` on the command line (`python -m jarvis --debug`, `python -m jarvis --text --debug`). Then tool calls, status and the full conversation go to `logs/jarvis.log`, which is cleared on each launch. Warnings and errors always show in the terminal.
 
 ## Project layout
 
@@ -103,7 +105,7 @@ jarvis/            the assistant, run with `python -m jarvis`
     page.html      the page itself
 voices/            Piper voice files (downloaded by setup)
 data/              memory.json (created when Jarvis first remembers something)
-logs/              jarvis.log, cleared on each launch
+logs/              jarvis.log in debug mode, cleared on each launch
 ```
 
 ## Troubleshooting
