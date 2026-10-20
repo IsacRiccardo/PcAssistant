@@ -1156,8 +1156,8 @@ const clip = (text, n) => text.length <= n ? text : text.slice(0, n - 1).trimEnd
 
 // Appearing and disappearing, and the caption bubble: the same motion as jarvis/ui/orb.py, keep them in step
 const START_SCALE = 0.6, END_SCALE = 0.85, OUT_SPEED = 0.7, PILL = [44, 26];
-const IN = { alpha: [0, 0.55], bars: [0.15, 0.6], sweep: [0.3, 0.7] };
-const OUT = { sweep: [0, 0.6], bars: [0.1, 0.6], alpha: [0.2, 0.8], scale: [0, 1] };
+const APPEARING = { alpha: [0, 0.55], bars: [0.15, 0.6], sweep: [0.3, 0.7] };
+const DISAPPEARING = { sweep: [0, 0.6], bars: [0.1, 0.6], alpha: [0.2, 0.8], scale: [0, 1] };
 const easeOut = x => 1 - (1 - x) ** 3, easeIn = x => x ** 3;
 const progress = (t, delay, span) => span <= 0 ? 1 : Math.min(Math.max((t - delay) / span, 0), 1);
 class Spring {
@@ -1229,7 +1229,7 @@ class OrbPreview {
     } else this.since += dt;
     if (shown) {
       const t = F > 0 ? this.since / F : 1;
-      for (const [part, [delay, span]] of Object.entries(IN)) {
+      for (const [part, [delay, span]] of Object.entries(APPEARING)) {
         const start = this.fromParts[part];
         this.parts[part] = start + (1 - start) * easeOut(progress(t, delay, span));
       }
@@ -1237,9 +1237,9 @@ class OrbPreview {
       this.bloom = Math.sin(Math.PI * Math.min(t / 0.9, 1)) * (1 - this.fromParts.alpha);
     } else {
       const t = F > 0 ? this.since / (F * OUT_SPEED) : 1;
-      for (const [part, [delay, span]] of Object.entries(OUT))
+      for (const [part, [delay, span]] of Object.entries(DISAPPEARING))
         if (part !== "scale") this.parts[part] = this.fromParts[part] * (1 - easeIn(progress(t, delay, span)));
-      this.scale = this.fromScale + (END_SCALE - this.fromScale) * easeIn(progress(t, ...OUT.scale));
+      this.scale = this.fromScale + (END_SCALE - this.fromScale) * easeIn(progress(t, ...DISAPPEARING.scale));
       this.spring.value = this.scale; this.spring.velocity = 0;
       this.bloom = 0;
     }

@@ -57,23 +57,25 @@ class Ears:
         self.cfg = cfg
         self.status = status
         log.info("Loading speech models...")
-        self.stt = _load_whisper(cfg.whisper_model)
+        self.whisper = _load_whisper(cfg.whisper_model)
         self.picker = None   # only needed when there's more than one language to choose from
-        if len(cfg.languages) > 1 and self.stt.model.is_multilingual:
-            self.picker = self.stt.model = LanguagePicker(self.stt.model, cfg.languages)
+        if len(cfg.languages) > 1 and self.whisper.model.is_multilingual:
+            self.picker = self.whisper.model = LanguagePicker(self.whisper.model, cfg.languages)
         self.wake = Model(wakeword_models=list(cfg.wake_word), inference_framework="onnx")   # one score per wake word
-        self.q = queue.Queue()
+        self.chunks = queue.Queue()   # microphone audio, CHUNK samples at a time, as it comes in
         self.transcribe(np.zeros(SAMPLE_RATE, np.float32))   # loads the speech detector now, not on the first command
         log.info("Speech models loaded")
 
-    def _callback(self, indata, frames, time_info, status):
+    def _on_audio(self, indata, frames, time_info, status):
+        """Called by the microphone stream, on its own thread, for every chunk it records."""
         chunk = indata[:, 0].copy()
         self.status.mic_loudness = float(np.abs(chunk).mean())
-        self.q.put(chunk)
+        self.chunks.put(chunk)
 
     def _drain(self):
-        while not self.q.empty():
-            self.q.get_nowait()
+        """Drop the audio recorded so far, like Jarvis's own voice while it was talking."""
+        while not self.chunks.empty():
+            self.chunks.get_nowait()
 
     def record_command(self, wait_seconds: float) -> np.ndarray | None:
         """Record until the user stops talking. None if they never started within wait_seconds."""
@@ -84,9 +86,9 @@ class Ears:
         no_speech_chunks = int(wait_seconds * per_sec)
         grace_chunks = int(self.cfg.beep_grace_seconds * per_sec)
         for _ in range(max_chunks):
-            chunk = self.q.get()
+            chunk = self.chunks.get()
             frames.append(chunk)
-            if len(frames) <= grace_chunks:   # beep echo, not the user talking
+            if len(frames) <= grace_chunks:   # the echo of the wake beep or reply, not the user talking
                 continue
             if np.abs(chunk).mean() > self.cfg.silence_level:
                 started, silent = True, 0
@@ -102,7 +104,7 @@ class Ears:
         """What was said, and the language it was said in. With no languages set, Whisper chooses
         from all of them, which takes a separate pass over the audio."""
         languages = self.cfg.languages
-        segments, info = self.stt.transcribe(
+        segments, info = self.whisper.transcribe(
             audio, language=languages[0] if languages else None, multilingual=self.picker is not None,
             beam_size=1, vad_filter=True, condition_on_previous_text=False, without_timestamps=True,
         )
@@ -143,11 +145,11 @@ class Ears:
         answers the wake word (a short beep without it)."""
         phrase = " or ".join(f'"{wake_phrase(w)}"' for w in self.cfg.wake_word)
         with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="int16",
-                            blocksize=CHUNK, callback=self._callback):
+                            blocksize=CHUNK, callback=self._on_audio):
             log.info("Listening... say %s", phrase)
             self.status.set_state("sleeping")
             while True:
-                chunk = self.q.get()
+                chunk = self.chunks.get()
                 scores = self.wake.predict(chunk)
                 if max(scores.values()) < self.cfg.wake_threshold:
                     continue

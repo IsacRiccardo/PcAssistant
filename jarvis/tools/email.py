@@ -99,9 +99,9 @@ class EmailComposer:
         return match.group(0) if match else None
 
     def _open_draft(self, language: str | None = None) -> str:
-        d, self.draft = self.draft, None
-        webbrowser.open(f"{GMAIL_COMPOSE}&to={quote(d['to'])}&su={quote(d['subject'])}"
-                        f"&body={quote(d['body'])}")
-        log.info("[email] opened draft to %s", d["to"])
+        draft, self.draft = self.draft, None
+        webbrowser.open(f"{GMAIL_COMPOSE}&to={quote(draft['to'])}&su={quote(draft['subject'])}"
+                        f"&body={quote(draft['body'])}")
+        log.info("[email] opened draft to %s", draft["to"])
         return translate(language, "Your email to {to} is filled in and open in Gmail, but not sent yet. "
-                                   "Check it and press Send.", to=d["to"])
+                                   "Check it and press Send.", to=draft["to"])

@@ -24,27 +24,31 @@ _dwmapi = ctypes.WinDLL("dwmapi")
 _kernel32 = ctypes.WinDLL("kernel32")
 _kernel32.GetConsoleWindow.restype = wintypes.HWND
 _EnumWindowsProc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
-WM_CLOSE, GW_OWNER, GWL_EXSTYLE, WS_EX_TOOLWINDOW, DWMWA_CLOAKED = 0x0010, 4, -20, 0x80, 14
+WM_CLOSE = 0x0010           # the message clicking a window's X sends
+GW_OWNER = 4                # a window's owner: dialogs and popups have one, app windows don't
+GWL_EXSTYLE = -20           # a window's extended style flags
+WS_EX_TOOLWINDOW = 0x80     # floating tool windows, which aren't on the taskbar
+DWMWA_CLOAKED = 14          # whether a window is kept alive but hidden (like suspended Store apps)
 # the desktop and the taskbar: never close these
 _SHELL = {"Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd"}
 
 
 def _open_windows() -> list[tuple[wintypes.HWND, str, str]]:
     """The app windows on the taskbar: (handle, lowercase title, program like 'excel')."""
-    found, me, console = [], os.getpid(), _kernel32.GetConsoleWindow()
+    found, my_pid, my_console = [], os.getpid(), _kernel32.GetConsoleWindow()
 
-    def add(handle, _):
+    def collect(handle, _):   # called by Windows for every top-level window; True: keep going
         hwnd = wintypes.HWND(handle)
-        if (handle == console or not _user32.IsWindowVisible(hwnd) or _user32.GetWindow(hwnd, GW_OWNER)
+        if (handle == my_console or not _user32.IsWindowVisible(hwnd) or _user32.GetWindow(hwnd, GW_OWNER)
                 or _user32.GetWindowLongW(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW):
             return True
-        cloaked, pid = wintypes.DWORD(), wintypes.DWORD()   # cloaked: kept alive but not on screen
+        cloaked, pid = wintypes.DWORD(), wintypes.DWORD()
         _dwmapi.DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, ctypes.byref(cloaked), ctypes.sizeof(cloaked))
         _user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-        cls, title = ctypes.create_unicode_buffer(256), ctypes.create_unicode_buffer(512)
-        _user32.GetClassNameW(hwnd, cls, 256)
+        class_name, title = ctypes.create_unicode_buffer(256), ctypes.create_unicode_buffer(512)
+        _user32.GetClassNameW(hwnd, class_name, 256)
         _user32.GetWindowTextW(hwnd, title, 512)
-        if cloaked.value or pid.value == me or cls.value in _SHELL or not title.value:
+        if cloaked.value or pid.value == my_pid or class_name.value in _SHELL or not title.value:
             return True
         try:
             program = psutil.Process(pid.value).name().lower().removesuffix(".exe")
@@ -54,7 +58,7 @@ def _open_windows() -> list[tuple[wintypes.HWND, str, str]]:
         found.append((hwnd, title.value.replace("​", " ").lower().strip(), program))
         return True
 
-    _user32.EnumWindows(_EnumWindowsProc(add), 0)
+    _user32.EnumWindows(_EnumWindowsProc(collect), 0)
     return found
 
 
@@ -127,12 +131,13 @@ class Launcher:
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.request = ""   # what the user just said, set by Tools.begin
-        # this PC's apps, looked up fresh each launch since every PC has different ones
+        # this PC's apps (Start menu name -> what opens it), looked up fresh each launch since every
+        # PC has different ones; that takes a few seconds, so it runs in the background
         self.apps: dict[str, str] = {}
-        self._scan = threading.Thread(target=self._rescan, daemon=True)
-        self._scan.start()
+        self._scanning = threading.Thread(target=self._scan_start_menu, daemon=True)
+        self._scanning.start()
 
-    def _rescan(self) -> None:
+    def _scan_start_menu(self) -> None:
         self.apps = _start_menu_apps()
 
     def _match(self, key: str) -> str | None:
@@ -163,10 +168,10 @@ class Launcher:
             return self.open_website(key)
         # 'start' returns straight away even for a missing app (Windows shows an error box),
         # so check first or the model would be told it worked
-        self._scan.join()
+        self._scanning.join()
         target = self._find(key)
         if target is None:   # maybe installed since Jarvis started
-            self._rescan()
+            self._scan_start_menu()
             target = self._find(key)
         if target is None:
             return f"Failed: {name} isn't installed on this PC."
@@ -188,18 +193,11 @@ class Launcher:
         key = name.lower().strip()
         if key in self.cfg.sites:
             return f"Failed: {name} is a website. I can only close whole apps, not browser tabs."
-        self._scan.join()
-        app = self._match(key)   # its Start menu name, e.g. 'google chrome' for 'chrome'
-        titles = {key, app} - {None}   # app windows are titled like 'Book1 - Excel'
-        words = _words(key) or [key]
-        # the program behind it: 'spotify', 'explorer' for 'file explorer', 'winword' for 'word'
-        programs = {"".join(words), words[-1], _program_in(self.apps[app]) if app else ""} - {""}
-        windows = [hwnd for hwnd, title, program in _open_windows()
-                   if program in programs or any(re.search(rf"(^|\W){re.escape(t)}$", title) for t in titles)]
+        windows = self._windows_of(key)
         if not windows:
             return f"Failed: {name} isn't open."
 
-        # a polite request, so apps with unsaved work still ask whether to save
+        # a polite request, the same as clicking X, so apps with unsaved work still ask whether to save
         refused = [hwnd for hwnd in windows if not _user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)]
         if len(refused) == len(windows):
             return f"Failed: Windows didn't let me close {name}. It may be running as administrator."
@@ -209,6 +207,17 @@ class Launcher:
         if any(_user32.IsWindowVisible(hwnd) for hwnd in windows):
             return f"Asked {name} to close, but it's still open. It's probably asking whether to save changes."
         return f"Closed {name}."
+
+    def _windows_of(self, key: str) -> list[wintypes.HWND]:
+        """The open windows of an app, found by the program behind them or by their title."""
+        self._scanning.join()
+        app = self._match(key)   # its Start menu name, e.g. 'google chrome' for 'chrome'
+        titles = {key, app} - {None}   # app windows are titled like 'Book1 - Excel'
+        words = _words(key) or [key]
+        # the program behind it: 'spotify', 'explorer' for 'file explorer', 'winword' for 'word'
+        programs = {"".join(words), words[-1], _program_in(self.apps[app]) if app else ""} - {""}
+        return [hwnd for hwnd, title, program in _open_windows()
+                if program in programs or any(re.search(rf"(^|\W){re.escape(t)}$", title) for t in titles)]
 
     def open_website(self, url: str = "", browser: str = "") -> str:
         """Open a website, or a blank new tab, in a browser.
@@ -221,33 +230,39 @@ class Launcher:
         asked = (browser or "").lower().strip()
         if not url and asked in self.cfg.sites:   # site put in the wrong argument, e.g. browser='gmail'
             url, asked = asked, ""
-        url = self.cfg.sites.get(url.lower(), url)
-        if url.lower() in ("new tab", "newtab", "blank"):
-            url = ""
-        if url and ":" not in url.split("/")[0]:  # bare domain like 'youtube.com'
-            url = "https://" + url
+        url = self._address(url)
 
-        known = ", ".join(self.cfg.browsers)
         # substring match so 'microsoft edge' finds 'edge' and 'google chrome' finds 'chrome'
         name = next((n for n in self.cfg.browsers if n in asked), None) if asked else None
         request = self.request.lower()
         if asked and asked not in request and not (name and name in request):
             log.info("[tool] ignoring browser %r, the user didn't ask for it", asked)
             asked, name = "", None
+        known = ", ".join(self.cfg.browsers)
         if asked and name is None:
             return f"Failed: I don't know the browser {browser}. I can use {known}."
-        if name is None:
+
+        if name is None:   # the default browser
             if not url:
                 return f"Say which browser to open a new tab in: {known}."
             webbrowser.open(url)
             return f"Opened {url} in the default browser."
-
-        b = self.cfg.browsers[name]
+        chosen = self.cfg.browsers[name]
         try:
-            _start(b.command, *b.args, url or b.new_tab)
+            _start(chosen.command, *chosen.args, url or chosen.new_tab)
             return f"Opened {url or 'a new tab'} in {name}."
         except Exception as e:
             return f"Failed to open {name}: {e}"
+
+    def _address(self, url: str) -> str:
+        """The full address for a site name ('gmail'), a bare domain ('youtube.com') or an address;
+        empty for a blank new tab."""
+        url = self.cfg.sites.get(url.lower(), url)
+        if url.lower() in ("new tab", "newtab", "blank"):
+            return ""
+        if url and ":" not in url.split("/")[0]:  # bare domain like 'youtube.com'
+            return "https://" + url
+        return url
 
     @staticmethod
     def search_web(query: str) -> str:

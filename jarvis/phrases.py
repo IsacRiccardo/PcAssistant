@@ -21,5 +21,5 @@ def wake_phrase(wake_word: str) -> str:
 def said(text: str, phrases: tuple[str, ...]) -> bool:
     """True if text is one of the phrases as a short command on its own, not part of a longer request.
     The phrases must already be in words() form."""
-    w = words(text)
-    return len(w.split()) <= 5 and any(f" {p} " in f" {w} " for p in phrases)
+    spoken = words(text)
+    return len(spoken.split()) <= 5 and any(f" {phrase} " in f" {spoken} " for phrase in phrases)

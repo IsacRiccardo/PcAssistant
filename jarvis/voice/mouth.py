@@ -32,8 +32,8 @@ class Mouth:
     def __init__(self, cfg: Config, status: Status):
         self.status = status
         self.voices = {}    # language -> Piper voice, in the order of piper_voices
-        self.ready = {}     # text -> its audio, synthesized in advance so short fixed replies start at once
-        self.engine = None
+        self.prepared = {}  # text -> its audio, synthesized in advance so short fixed replies start at once
+        self.windows_voice = None   # used only when no Piper voice could be loaded
         try:
             from piper import PiperVoice
 
@@ -52,7 +52,7 @@ class Mouth:
         if not self.voices:
             log.warning("No Piper voice, using the Windows voice.")
             import pyttsx3
-            self.engine = pyttsx3.init()
+            self.windows_voice = pyttsx3.init()
         for language in cfg.languages:
             if self.voices and language not in self.voices:
                 log.warning("No Piper voice speaks '%s', so replies in it use the first voice.", language)
@@ -81,18 +81,18 @@ class Mouth:
         if self.voices:
             voice = next(iter(self.voices.values()))
             for text in texts:
-                self.ready[text] = [(_trim(c.audio_int16_array, c.sample_rate), c.sample_rate)
+                self.prepared[text] = [(_trim(c.audio_int16_array, c.sample_rate), c.sample_rate)
                                     for c in voice.synthesize(text)]
 
     def _speak(self, text: str, language: str | None) -> None:
         if not self.voices:
             self.status.set_state("speaking")
-            self.engine.say(text)
-            self.engine.runAndWait()
+            self.windows_voice.say(text)
+            self.windows_voice.runAndWait()
             return
         voice = self.voices.get(language) or next(iter(self.voices.values()))
-        ready = self.ready.get(text) if language is None else None
-        chunks = ready or ((c.audio_int16_array, c.sample_rate) for c in voice.synthesize(text))   # one per sentence
+        prepared = self.prepared.get(text) if language is None else None
+        chunks = prepared or ((c.audio_int16_array, c.sample_rate) for c in voice.synthesize(text))   # one per sentence
         for data, rate in chunks:
             self.status.set_state("speaking")
             sd.play(data, rate)

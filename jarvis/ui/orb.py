@@ -21,8 +21,8 @@ START_SCALE = 0.6       # the orb springs in from this size...
 END_SCALE = 0.85        # ...and sinks to this one as it goes
 OUT_SPEED = 0.7         # disappearing takes this share of fade_seconds
 # when each part comes and goes: (delay, duration), as shares of the appear or disappear time
-IN = {"alpha": (0, 0.55), "bars": (0.15, 0.6), "sweep": (0.3, 0.7)}
-OUT = {"sweep": (0, 0.6), "bars": (0.1, 0.6), "alpha": (0.2, 0.8), "scale": (0, 1)}
+APPEARING = {"alpha": (0, 0.55), "bars": (0.15, 0.6), "sweep": (0.3, 0.7)}
+DISAPPEARING = {"sweep": (0, 0.6), "bars": (0.1, 0.6), "alpha": (0.2, 0.8), "scale": (0, 1)}
 
 
 def rgb(color: str) -> list[float]:
@@ -185,7 +185,8 @@ class Orb(Status):
         return 1 - (1 - k) ** (BASE_FPS / self.cfg.fps)
 
     def _appear(self, shown: bool) -> None:
-        """Advance appearing or disappearing by one frame."""
+        """Advance appearing or disappearing by one frame. Each part follows its own stage in APPEARING or
+        DISAPPEARING; done is the share of the whole animation that has passed."""
         cfg, dt = self.cfg, 1 / self.cfg.fps
         if shown != self.shown:              # start from wherever it is, so waking mid-fade-out is smooth
             self.shown, self.since = shown, 0.0
@@ -195,19 +196,19 @@ class Orb(Status):
         else:
             self.since += dt
         if shown:
-            t = self.since / cfg.fade_seconds if cfg.fade_seconds > 0 else 1.0
-            for part, (delay, span) in IN.items():
+            done = self.since / cfg.fade_seconds if cfg.fade_seconds > 0 else 1.0
+            for part, (delay, span) in APPEARING.items():
                 start = self.from_parts[part]
-                self.parts[part] = start + (1 - start) * ease_out(progress(t, delay, span))
-            self.scale = self.scale_spring.step(1.0, dt, cfg.fade_seconds, cfg.bounce)
-            self.bloom = math.sin(math.pi * min(t / 0.9, 1.0)) * (1 - self.from_parts["alpha"])
+                self.parts[part] = start + (1 - start) * ease_out(progress(done, delay, span))
+            self.scale = self.scale_spring.step(1.0, dt, cfg.fade_seconds, cfg.bounce)   # springs, with overshoot
+            self.bloom = math.sin(math.pi * min(done / 0.9, 1.0)) * (1 - self.from_parts["alpha"])
         else:
-            t = self.since / (cfg.fade_seconds * OUT_SPEED) if cfg.fade_seconds > 0 else 1.0
-            for part, (delay, span) in OUT.items():
+            done = self.since / (cfg.fade_seconds * OUT_SPEED) if cfg.fade_seconds > 0 else 1.0
+            for part, (delay, span) in DISAPPEARING.items():
                 if part != "scale":
-                    self.parts[part] = self.from_parts[part] * (1 - ease_in(progress(t, delay, span)))
-            self.scale = self.from_scale + (END_SCALE - self.from_scale) * ease_in(progress(t, *OUT["scale"]))
-            self.scale_spring.value, self.scale_spring.velocity = self.scale, 0.0
+                    self.parts[part] = self.from_parts[part] * (1 - ease_in(progress(done, delay, span)))
+            self.scale = self.from_scale + (END_SCALE - self.from_scale) * ease_in(progress(done, *DISAPPEARING["scale"]))
+            self.scale_spring.value, self.scale_spring.velocity = self.scale, 0.0   # a wake-up springs from here
             self.bloom = 0.0
         self.alpha = cfg.opacity * self.parts["alpha"]
 

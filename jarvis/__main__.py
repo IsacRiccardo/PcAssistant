@@ -97,14 +97,19 @@ def run_voice(cfg: Config, brain: Brain, no_ui: bool) -> None:
         mouth = Mouth(cfg, status)
         with ThreadPoolExecutor(1) as pool:
             # speech models load while the greeting plays (loading both at once only competes for the CPU)
-            ears = pool.submit(Ears, cfg, status)
+            loading = pool.submit(Ears, cfg, status)
             mouth.say(cfg.greeting)
             mouth.prepare(cfg.wake_reply)
-            ears = ears.result()
-        ears.listen_until_shutdown(lambda text, language: mouth.say(brain.reply(text, language), language),
-                                   on_sleep=brain.end_conversation,
-                                   dictating=lambda: brain.dictating,
-                                   on_wake=(lambda: mouth.say(random.choice(cfg.wake_reply))) if cfg.wake_reply else None)
+            ears = loading.result()
+
+        def answer(text: str, language: str) -> None:
+            mouth.say(brain.reply(text, language), language)   # spoken sentence by sentence as it's written
+
+        def answer_wake_word() -> None:
+            mouth.say(random.choice(cfg.wake_reply))
+
+        ears.listen_until_shutdown(answer, on_sleep=brain.end_conversation, dictating=lambda: brain.dictating,
+                                   on_wake=answer_wake_word if cfg.wake_reply else None)   # None: a beep
         mouth.say(cfg.farewell)
         status.close()
 

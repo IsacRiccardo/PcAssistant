@@ -1,8 +1,18 @@
-"""Brain: talks to the local model through Ollama, runs the tools it asks for."""
+"""
+Brain: talks to the local model through Ollama and runs the tools it asks for.
+
+How one request is answered (Brain.reply):
+  1. Pick the tools to offer: the ones whose words the request contains (Tools.offered), or for a
+     follow-up like "and microsoft?", the ones the last request used.
+  2. Build the messages: the system prompt, the conversation so far, and the request.
+  3. Ask the model. If it calls tools, run them, add their results and ask again, up to
+     max_tool_rounds times. Its words are passed on sentence by sentence, so speaking starts early.
+  4. Keep the turn, so the next request can refer back to it.
+"""
 import json
 import logging
 import re
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 
 import ollama
 import psutil
@@ -33,8 +43,15 @@ NO_TOOLS = (
 )
 SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 
+ToolCall = tuple[str, dict]   # (tool name, arguments)
 
-def _text_tool_calls(content: str | None) -> list[tuple[str, dict]]:
+
+def _looks_like_json(content: str) -> bool:
+    """Whether the model is writing JSON: a tool call typed out as text, never to be read aloud."""
+    return content.lstrip().startswith("{")
+
+
+def _text_tool_calls(content: str | None) -> list[ToolCall]:
     """Small models sometimes write a tool call as plain JSON text instead of making it,
     which would otherwise be read out loud. Turn that back into a real call."""
     try:
@@ -68,8 +85,8 @@ class Brain:
         self.cfg = cfg
         self.tools = tools
         self.memory = memory
-        self.turns = []      # each: the request, the tool calls and results, the reply
-        self.exchange = []   # the tool calls and results of the request being answered
+        self.turns = []           # each: the request, its tool calls and their results, the reply
+        self.tool_messages = []   # the tool calls and results of the request being answered
         self.follow_up_tools = None   # the last request's tools, if it used one: 'of apple?' after a stock price
 
     @property
@@ -79,12 +96,12 @@ class Brain:
 
     def model(self) -> str:
         """Bigger model when plugged in, smaller one on battery."""
-        b = psutil.sensors_battery()
-        plugged = b is None or b.power_plugged
-        return self.cfg.model_plugged_in if plugged else self.cfg.model_on_battery
+        battery = psutil.sensors_battery()
+        plugged_in = battery is None or battery.power_plugged
+        return self.cfg.model_plugged_in if plugged_in else self.cfg.model_on_battery
 
     def system_prompt(self) -> str:
-        facts = "\n".join(f"- {f}" for f in self.memory.facts()) or "(nothing yet)"
+        facts = "\n".join(f"- {fact}" for fact in self.memory.facts()) or "(nothing yet)"
         return (
             f"{self.cfg.personality}\n\n"
             f"{self._addressing()}"
@@ -139,11 +156,11 @@ class Brain:
         """The reply, one sentence at a time as the model writes it, so speaking can start early.
         language is the one the user spoke in ('de'), if known; the reply is in it too."""
         spoken = []
-        self.exchange = []
+        self.tool_messages = []
         for sentence in self._reply(text, language):
             spoken.append(sentence)
             yield sentence
-        self.turns.append([{"role": "user", "content": text}, *self.exchange,
+        self.turns.append([{"role": "user", "content": text}, *self.tool_messages,
                            {"role": "assistant", "content": " ".join(spoken)}])
         self.turns = self.turns[-self.cfg.history_turns:]
 
@@ -153,67 +170,77 @@ class Brain:
         price instead of calling the tool again. Only the last one, so the context stays small."""
         if not self.turns:
             return []
-        return [m for turn in self.turns[:-1] for m in (turn[0], turn[-1])] + self.turns[-1]
-
-    def _run(self, messages: list, calls: list[tuple[str, dict]], tools: list, content: str = "") -> None:
-        """Run tool calls, adding them and their results to this request's messages and its history."""
-        self.follow_up_tools = tools
-        # a call written as JSON text is recorded as a real one, so the history never shows that habit
-        self.exchange.append(ollama.Message(
-            role="assistant", content=content,
-            tool_calls=[ollama.Message.ToolCall(function=ollama.Message.ToolCall.Function(name=n, arguments=a))
-                        for n, a in calls]))
-        for name, args in calls:
-            result = self.tools.call(name, args)
-            self.exchange.append({"role": "tool", "content": result, "tool_name": name})
-        messages += self.exchange[-1 - len(calls):]
+        return [message for turn in self.turns[:-1] for message in (turn[0], turn[-1])] + self.turns[-1]
 
     def _reply(self, text: str, language: str | None) -> Iterator[str]:
         if self.tools.email.active:   # answering one of the email questions
             yield self.tools.email.answer(text, language)
             return
 
+        previous_tools, self.follow_up_tools = self.follow_up_tools, None
         # a request without tool words of its own may be a follow-up to the last one ('and microsoft?')
-        previous = self.follow_up_tools
-        tools = self.tools.offered(text) or previous
-        self.follow_up_tools = None
-        # next to the request, where small models actually heed them; history stays clean
-        notes = [f"Reply in {languages.name(language)}."] if language else []
-        if tools is None:
-            notes.append(NO_TOOLS)
-        request = f"{text}\n\n({' '.join(notes)})" if notes else text
-        messages = ([{"role": "system", "content": self.system_prompt()}] + self._history()
-                    + [{"role": "user", "content": request}])
+        tools = self.tools.offered(text) or previous_tools
+        messages = self._messages(text, language, tools)
         self.tools.begin(text)
-        again = self.tools.again(text, previous)
-        if again:
-            self._run(messages, again, tools)
+        fetched_ahead = self.tools.fetch_ahead(text, previous_tools)   # like 'and tomorrow?' after the weather
+        if fetched_ahead:
+            self._run_tools(messages, fetched_ahead, tools)
 
-        for round_ in range(self.cfg.max_tool_rounds):
+        for round_number in range(self.cfg.max_tool_rounds):
             # While the model may still decide to act, hold its words back until it's clear it isn't
             # calling a tool, so it never announces an action that didn't happen. Otherwise speak
             # each sentence as soon as it's written.
-            live = tools is None or round_ > 0
-            content, raw_calls, sentences = "", [], Sentences()
-            for part in self._chat(messages, tools):
-                msg = part.message
-                raw_calls += msg.tool_calls or []
-                content += msg.content or ""
-                if live and not raw_calls and not content.lstrip().startswith("{"):
-                    yield from sentences.feed(msg.content or "")
-
-            calls = [(c.function.name, c.function.arguments or {}) for c in raw_calls]
-            calls = calls or _text_tool_calls(content)
+            speak_as_written = tools is None or round_number > 0
+            calls, said_with_calls = yield from self._ask_model(messages, tools, speak_as_written)
             if not calls:
-                if live and not content.lstrip().startswith("{"):
-                    yield from sentences.flush()
-                elif content.strip():   # held back the whole time: say it all now
-                    yield content.strip()
                 return
-
-            self._run(messages, calls, tools, content if raw_calls else "")
+            self._run_tools(messages, calls, tools, said_with_calls)
             if self.tools.email.active:   # an email was started: ask for what's missing, word for word
                 yield self.tools.email.next_question(language)
                 return
 
         yield languages.translate(language, "Sorry, I got a bit stuck on that one.")
+
+    def _messages(self, text: str, language: str | None, tools: list | None) -> list:
+        """The system prompt, the conversation so far, and the request. Notes for the model go next to
+        the request, where small models actually heed them; the history keeps the request as said."""
+        notes = [f"Reply in {languages.name(language)}."] if language else []
+        if tools is None:
+            notes.append(NO_TOOLS)
+        request = f"{text}\n\n({' '.join(notes)})" if notes else text
+        return ([{"role": "system", "content": self.system_prompt()}] + self._history()
+                + [{"role": "user", "content": request}])
+
+    def _ask_model(self, messages: list, tools: list | None,
+                   speak_as_written: bool) -> Generator[str, None, tuple[list[ToolCall], str]]:
+        """One round with the model. Yields its reply sentence by sentence (or all at once at the end,
+        if held back), and returns (the tool calls it made, what it wrote alongside them). When it
+        calls tools, nothing is yielded."""
+        content, raw_calls, sentences = "", [], Sentences()
+        for part in self._chat(messages, tools):
+            raw_calls += part.message.tool_calls or []
+            content += part.message.content or ""
+            if speak_as_written and not raw_calls and not _looks_like_json(content):
+                yield from sentences.feed(part.message.content or "")
+
+        calls = [(c.function.name, c.function.arguments or {}) for c in raw_calls] or _text_tool_calls(content)
+        if calls:
+            return calls, content if raw_calls else ""   # a call typed out as JSON isn't kept as its words
+        if speak_as_written and not _looks_like_json(content):
+            yield from sentences.flush()
+        elif content.strip():   # held back the whole time: say it all now
+            yield content.strip()
+        return [], content
+
+    def _run_tools(self, messages: list, calls: list[ToolCall], tools: list, said_with_calls: str = "") -> None:
+        """Run tool calls, adding them and their results to this request's messages and its history."""
+        self.follow_up_tools = tools
+        # a call typed out as JSON is recorded as a real one, so the history never shows that habit
+        self.tool_messages.append(ollama.Message(
+            role="assistant", content=said_with_calls,
+            tool_calls=[ollama.Message.ToolCall(function=ollama.Message.ToolCall.Function(name=name, arguments=args))
+                        for name, args in calls]))
+        for name, args in calls:
+            result = self.tools.call(name, args)
+            self.tool_messages.append({"role": "tool", "content": result, "tool_name": name})
+        messages += self.tool_messages[-1 - len(calls):]

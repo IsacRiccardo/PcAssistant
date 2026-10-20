@@ -74,57 +74,65 @@ class Hud(Orb):
         if self.alpha == 0:
             self.bubble.reset()              # so the caption grows out of its pill again next time
             return
-        cfg, m, y = self.cfg, self.cfg.width / 2, self.caption_y
+        cfg, cx, top = self.cfg, self.cfg.width / 2, self.caption_y
         panel, _ = self._caption_layout(self.drawn)
         # going to sleep, the caption shrinks back into its pill while the orb leaves
         target = (panel.left(), panel.top(), panel.right(), panel.bottom()) if panel and self.shown else None
-        pill = (m - PILL[0] / 2, y - 10, m + PILL[0] / 2, y - 10 + PILL[1])
+        pill = (cx - PILL[0] / 2, top - 10, cx + PILL[0] / 2, top - 10 + PILL[1])
         self.bubble.step(target, pill, self.caption(self.drawn), 1 / cfg.fps, cfg.fade_seconds, cfg.bounce)
         self.window.update()                 # repaint on the next pass of the event loop
 
     def paint(self, p: QPainter):
-        cfg, m, y = self.cfg, self.cfg.width / 2, self.cfg.orb_y
+        """Draw the frame step() worked out: the caption, then the orb from the back to the front."""
         p.setRenderHints(QPainter.Antialiasing | QPainter.TextAntialiasing)
         self._paint_caption(p, self.drawn)
-        center, color, lv = QPointF(m, y), self.color, self.level
-        core_r = self.core_radius
+        center = QPointF(self.cfg.width / 2, self.cfg.orb_y)
         p.translate(center)                  # the whole orb springs in and sinks away around its centre
         p.scale(self.scale, self.scale)
         p.translate(-center)
+        self._paint_glow(p, center)
+        self._paint_sound_ring(p, center)
+        self._paint_rings(p, center)
+        self._paint_core(p, center)
 
-        # soft light behind the core: brighter as it gets louder, and flaring up as the orb arrives
-        bloom = self.bloom
-        glow_r = core_r * (2.6 + 0.8 * bloom)
-        glow = QRadialGradient(center, glow_r)
-        glow.setColorAt(0.0, _color(color, min(1.0, (0.30 + 0.30 * lv) * (1 + 1.2 * bloom))))
-        glow.setColorAt(0.45, _color(color, min(1.0, (0.12 + 0.12 * lv) * (1 + 1.2 * bloom))))
+    def _paint_glow(self, p: QPainter, center: QPointF):
+        """Soft light behind the core: brighter as it gets louder, and flaring up as the orb arrives."""
+        color, level, bloom = self.color, self.level, self.bloom
+        radius = self.core_radius * (2.6 + 0.8 * bloom)
+        glow = QRadialGradient(center, radius)
+        glow.setColorAt(0.0, _color(color, min(1.0, (0.30 + 0.30 * level) * (1 + 1.2 * bloom))))
+        glow.setColorAt(0.45, _color(color, min(1.0, (0.12 + 0.12 * level) * (1 + 1.2 * bloom))))
         glow.setColorAt(1.0, _color(color, 0.0))
         p.setPen(Qt.NoPen)
         p.setBrush(glow)
-        p.drawEllipse(center, glow_r, glow_r)
+        p.drawEllipse(center, radius, radius)
 
+    def _paint_sound_ring(self, p: QPainter, center: QPointF):
+        """A thin circle round the core, and the bars outside it that move with the sound."""
+        core_r, color = self.core_radius, self.color
         p.setBrush(Qt.NoBrush)
         p.setPen(QPen(_color(color, 0.8 * self.parts["bars"]), 1))
         p.drawEllipse(center, core_r + 5, core_r + 5)
-
         p.setPen(QPen(_color(color), 3, Qt.SolidLine, Qt.RoundCap))
         inner = core_r + 11
-        for a, length in self.bars:
-            cos, sin = math.cos(a), math.sin(a)
-            p.drawLine(QPointF(m + inner * cos, y + inner * sin),
-                       QPointF(m + (inner + length) * cos, y + (inner + length) * sin))
+        for angle, length in self.bars:
+            direction = QPointF(math.cos(angle), math.sin(angle))
+            p.drawLine(center + direction * inner, center + direction * (inner + length))
 
-        for ring in cfg.rings:   # angles in 1/16 degree, counter-clockwise from 3 o'clock
+    def _paint_rings(self, p: QPainter, center: QPointF):
+        """The spinning arcs. Qt's angles are in 1/16 degree, counter-clockwise from 3 o'clock."""
+        for ring in self.cfg.rings:
             length = round(self.ring_length(ring.length) * 16)
             if not length:
                 continue
-            p.setPen(QPen(_color(color), ring.width, Qt.SolidLine, Qt.FlatCap))
-            p.drawArc(QRectF(m - ring.radius, y - ring.radius, 2 * ring.radius, 2 * ring.radius),
-                      round(self.ring_start(ring.start, ring.speed) * 16), length)
+            p.setPen(QPen(_color(self.color), ring.width, Qt.SolidLine, Qt.FlatCap))
+            box = QRectF(center.x() - ring.radius, center.y() - ring.radius, 2 * ring.radius, 2 * ring.radius)
+            p.drawArc(box, round(self.ring_start(ring.start, ring.speed) * 16), length)
 
-        p.setPen(QPen(_color(color), 2))
+    def _paint_core(self, p: QPainter, center: QPointF):
+        p.setPen(QPen(_color(self.color), 2))
         p.setBrush(_color(self.core_color))
-        p.drawEllipse(center, core_r, core_r)
+        p.drawEllipse(center, self.core_radius, self.core_radius)
 
     def _caption_layout(self, state: str):
         """Where the caption lines and their bubble go; worked out again only when the text changes."""

@@ -19,7 +19,7 @@ from .lookup import Weather, battery_status, get_stock_price, get_time, web_look
 log = logging.getLogger("jarvis")
 
 
-def _arguments(fn, args: dict) -> dict:
+def _clean_arguments(fn, args: dict) -> dict:
     """Small models sometimes copy the tool's own schema around the arguments, like
     {'type': 'object', 'properties': {'company': 'bitcoin'}}. Unwrap that and keep only what fn takes."""
     for _ in range(3):   # the wrappers can be nested: {'parameters': {'properties': {...}}}
@@ -32,7 +32,7 @@ def _arguments(fn, args: dict) -> dict:
     return {k: v for k, v in args.items() if k in takes and not (isinstance(v, dict) and "type" in v)}
 
 
-def _forms(phrase: str) -> set[str]:
+def _word_forms(phrase: str) -> set[str]:
     """The forms of a tool word a request may use, so a list needn't spell each one out: 'share' also
     matches 'shares', 'rain' 'raining', 'charge' 'charging', 'shares' 'share'. Only the last word of a
     phrase changes ('dow jones'). Endings come off only if 4 letters stay, so 'news' never matches 'new'."""
@@ -53,30 +53,31 @@ class Tools:
         self.launcher = Launcher(cfg)
         self.email = EmailComposer(cfg)
         self.weather = Weather()
-        self.all = [get_time, self.launcher.open_app, self.launcher.close_app, self.launcher.open_website,
-                    self.launcher.search_web, self.email.compose_email, self.weather.get_weather,
-                    get_stock_price, web_lookup, battery_status, self.remember]
-        self.by_name = {f.__name__: f for f in self.all}
+        self.functions = [get_time, self.launcher.open_app, self.launcher.close_app, self.launcher.open_website,
+                          self.launcher.search_web, self.email.compose_email, self.weather.get_weather,
+                          get_stock_price, web_lookup, battery_status, self.remember]
+        self.by_name = {f.__name__: f for f in self.functions}
         missing = self.by_name.keys() - cfg.tool_words.keys()
         if missing:
             raise SystemExit(f"config.json: 'tool_words' is missing: {', '.join(sorted(missing))}")
         # every form of every tool word, padded with spaces so they only match whole words
-        self.triggers = {name: {f" {form} " for w in ws for form in _forms(w)} for name, ws in cfg.tool_words.items()}
+        self.triggers = {name: {f" {form} " for word in tool_words for form in _word_forms(word)}
+                         for name, tool_words in cfg.tool_words.items()}
 
     def offered(self, text: str) -> list | None:
         """The tools whose words the request contains, or None for small talk, which stays fast that way.
         Fewer tools to choose from also means a small model picks the right one more often."""
         text = f" {words(text)} "   # the tool words are in this form too, so accents never matter
-        found = [f for f in self.all if any(t in text for t in self.triggers[f.__name__])]
+        found = [f for f in self.functions if any(trigger in text for trigger in self.triggers[f.__name__])]
         return found or None
 
-    def again(self, request: str, previous: list | None) -> list[tuple[str, dict]]:
+    def fetch_ahead(self, request: str, previous: list | None) -> list[tuple[str, dict]]:
         """Calls to make before the model answers. A follow-up that only changes the day, like 'and
         tomorrow?' right after the weather, gets that day for the same city: small models answer those
         from the last result instead, and make the numbers up. previous: the last request's tools."""
         if previous and self.weather.get_weather in previous:
             also = {w for w in self.cfg.tool_words["get_weather"] if " " not in w}   # 'will it rain on friday?'
-            args = self.weather.again(request, also)
+            args = self.weather.follow_up_args(request, also)
             if args:
                 return [("get_weather", args)]
         return []
@@ -87,10 +88,13 @@ class Tools:
 
     def call(self, name: str, args: dict) -> str:
         fn = self.by_name.get(name)
-        try:
-            result = fn(**_arguments(fn, args)) if fn else f"Failed: there is no tool called {name}. Use one of: {', '.join(self.by_name)}."
-        except Exception as e:
-            result = f"Failed: {e}"
+        if fn is None:
+            result = f"Failed: there is no tool called {name}. Use one of: {', '.join(self.by_name)}."
+        else:
+            try:
+                result = fn(**_clean_arguments(fn, args))
+            except Exception as e:
+                result = f"Failed: {e}"
         log.info("[tool] %s(%s) -> %s", name, args, result)
         return str(result)
 
