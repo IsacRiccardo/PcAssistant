@@ -4,10 +4,12 @@ Brain: talks to the local model through Ollama and runs the tools it asks for.
 How one request is answered (Brain.reply):
   1. Pick the tools to offer: the ones whose words the request contains (Tools.offered), or for a
      follow-up like "and microsoft?", the ones the last request used.
-  2. Build the messages: the system prompt, the conversation so far, and the request.
-  3. Ask the model. If it calls tools, run them, add their results and ask again, up to
+  2. If the request says plainly what to do ("set the volume to 30", "and tomorrow?" after the
+     weather), do it right away (Tools.direct_calls); the model then only words the answer.
+  3. Build the messages: the system prompt, the conversation so far, and the request.
+  4. Ask the model. If it calls tools, run them, add their results and ask again, up to
      max_tool_rounds times. Its words are passed on sentence by sentence, so speaking starts early.
-  4. Keep the turn, so the next request can refer back to it.
+  5. Keep the turn, so the next request can refer back to it.
 """
 import json
 import logging
@@ -180,18 +182,21 @@ class Brain:
         previous_tools, self.follow_up_tools = self.follow_up_tools, None
         # a request without tool words of its own may be a follow-up to the last one ('and microsoft?')
         tools = self.tools.offered(text) or previous_tools
-        messages = self._messages(text, language, tools)
         self.tools.begin(text)
-        fetched_ahead = self.tools.fetch_ahead(text, previous_tools)   # like 'and tomorrow?' after the weather
-        if fetched_ahead:
-            self._run_tools(messages, fetched_ahead, tools)
+        # what the request says plainly, like 'set the volume to 30', Jarvis does itself; the model then
+        # only words the answer, without tools, since given them it would do it a second time
+        direct = self.tools.direct_calls(text, tools, previous_tools)
+        model_tools = None if direct else tools
+        messages = self._messages(text, language, model_tools, acted=bool(direct))
+        if direct:
+            self._run_tools(messages, direct, tools)
 
         for round_number in range(self.cfg.max_tool_rounds):
             # While the model may still decide to act, hold its words back until it's clear it isn't
             # calling a tool, so it never announces an action that didn't happen. Otherwise speak
             # each sentence as soon as it's written.
-            speak_as_written = tools is None or round_number > 0
-            calls, said_with_calls = yield from self._ask_model(messages, tools, speak_as_written)
+            speak_as_written = model_tools is None or round_number > 0
+            calls, said_with_calls = yield from self._ask_model(messages, model_tools, speak_as_written)
             if not calls:
                 return
             self._run_tools(messages, calls, tools, said_with_calls)
@@ -201,11 +206,12 @@ class Brain:
 
         yield languages.translate(language, "Sorry, I got a bit stuck on that one.")
 
-    def _messages(self, text: str, language: str | None, tools: list | None) -> list:
+    def _messages(self, text: str, language: str | None, tools: list | None, acted: bool) -> list:
         """The system prompt, the conversation so far, and the request. Notes for the model go next to
-        the request, where small models actually heed them; the history keeps the request as said."""
+        the request, where small models actually heed them; the history keeps the request as said.
+        acted: Jarvis already did what was asked, and the results follow the request."""
         notes = [f"Reply in {languages.name(language)}."] if language else []
-        if tools is None:
+        if tools is None and not acted:
             notes.append(NO_TOOLS)
         request = f"{text}\n\n({' '.join(notes)})" if notes else text
         return ([{"role": "system", "content": self.system_prompt()}] + self._history()

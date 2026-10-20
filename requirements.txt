@@ -6,4 +6,5 @@ numpy
 psutil
 pyttsx3
 ddgs
+pycaw>=20240210      # speaker volume
 PySide6-Essentials   # Qt, draws the orb window

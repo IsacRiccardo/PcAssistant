@@ -20,7 +20,7 @@ from . import ROOT
 from .brain import Brain
 from .config import Config
 from .memory import Memory
-from .phrases import said
+from .phrases import about_the_computer, said
 from .tools import Tools
 
 log = logging.getLogger("jarvis")
@@ -62,7 +62,8 @@ def run_text(cfg: Config, brain: Brain) -> None:
             text = input("\nYou: ").strip()
         except (EOFError, KeyboardInterrupt):
             break
-        if text.lower() in ("exit", "quit") or (not brain.dictating and said(text, cfg.shutdown_phrases)):
+        quits = not brain.dictating and not about_the_computer(text) and said(text, cfg.shutdown_phrases)
+        if text.lower() in ("exit", "quit") or quits:
             print(f"Jarvis: {cfg.farewell}")
             break
         if text:

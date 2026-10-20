@@ -28,6 +28,10 @@ Plug the laptop in. On battery Jarvis switches to the smaller 1B model automatic
 - "Close Excel": the same as clicking its X, so an app with unsaved work still asks whether to save first. Every window of that app closes (all Chrome windows for "close Chrome")
 - "Search the web for Fiat Panda oil type"
 - "How's my battery?"
+- "Turn the volume up" / "Set the volume to 30" / "Mute": steps of 10%, an exact level, or mute and unmute
+- "Make the screen brighter" / "Set the brightness to 50": works on laptop screens; external monitors need their own buttons
+- "Shut down the computer" / "Restart the PC": Windows waits 30 seconds first, so you can say "cancel" (plain "shut down" still stops Jarvis itself)
+- "Put the computer to sleep" / "Lock the PC" / "Sign out"
 - "Remember that my favourite football team is Poli Timișoara"
 - "Send an email" (Jarvis asks who to, the subject and what it should say), or all at once: "Send an email to mom saying I'll be late". Say addresses like "john at gmail dot com". Jarvis opens the filled-in email in Gmail; you check it and press Send. Say "cancel" to drop it.
 
@@ -98,6 +102,7 @@ jarvis/            the assistant, run with `python -m jarvis`
     launcher.py    open apps, websites, browser tabs, Google searches
     lookup.py      time, battery, stock prices, web lookups
     email.py       the step-by-step email flow
+    system.py      volume, screen brightness, shutting down, sleep and lock
   voice/
     ears.py        wake word, recording, speech to text
     mouth.py       text to speech

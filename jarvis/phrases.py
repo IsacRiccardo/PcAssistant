@@ -18,6 +18,14 @@ def wake_phrase(wake_word: str) -> str:
     return name.replace("_", " ")
 
 
+COMPUTER_WORDS = {"computer", "pc", "laptop", "notebook", "windows", "machine", "system", "device"}
+
+
+def about_the_computer(text: str) -> bool:
+    """Whether this is about the PC, like 'shut down the computer', rather than about Jarvis."""
+    return bool(set(words(text).split()) & COMPUTER_WORDS)
+
+
 def said(text: str, phrases: tuple[str, ...]) -> bool:
     """True if text is one of the phrases as a short command on its own, not part of a longer request.
     The phrases must already be in words() form."""

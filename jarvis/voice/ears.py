@@ -9,7 +9,7 @@ import sounddevice as sd
 import winsound
 
 from ..config import Config
-from ..phrases import said, wake_phrase
+from ..phrases import about_the_computer, said, wake_phrase
 from ..ui import Status
 
 log = logging.getLogger("jarvis")
@@ -129,7 +129,9 @@ class Ears:
             print(f"You: {text}", flush=True)
             log.info("You (%s): %s", language, text)
             self.status.heard(text)
-            if not dictating():   # an email saying 'thanks, goodbye' shouldn't end the conversation
+            # an email saying 'thanks, goodbye' shouldn't end the conversation, and 'shut down the
+            # computer' is for the computer, not Jarvis
+            if not dictating() and not about_the_computer(text):
                 if said(text, self.cfg.shutdown_phrases):
                     return True
                 if said(text, self.cfg.sleep_phrases):

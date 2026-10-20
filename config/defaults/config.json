@@ -75,6 +75,12 @@
       "score", "scores", "who won"
     ],
     "battery_status": ["battery", "charge", "charging", "plugged"],
-    "remember": ["remember", "don't forget", "note that"]
+    "remember": ["remember", "don't forget", "note that"],
+    "set_volume": ["volume", "louder", "quieter", "mute", "unmute", "sound", "loud", "quiet"],
+    "set_brightness": ["brightness", "brighter", "dimmer", "dim", "darker", "bright"],
+    "computer_power": [
+      "shut down", "shutdown", "turn off", "power off", "switch off", "restart", "reboot", "sleep", "suspend",
+      "lock", "sign out", "log out", "log off", "cancel", "abort"
+    ]
   }
 }
