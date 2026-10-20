@@ -55,7 +55,7 @@ Or edit the files by hand. Everything is in `config/config.json`:
 - `sites`: website names → address (e.g. `"github": "github.com"`), so "open github" works without spelling out the URL
 - `contacts`: names → email addresses (e.g. `"mom": "mom@example.com"`), so you can say "email mom" instead of spelling out the address
 - `browsers`: browsers Jarvis can open sites or new tabs in (command, flags before the URL, blank new-tab page)
-- `tool_words`: for each tool, the words that offer it to the model (`"battery_status": ["battery", "charging"]`). Jarvis only offers the tools whose words your request contains as whole words, so small talk stays fast and the model picks from just a few. Add a word if a request should trigger a tool but doesn't; an empty list turns the tool off
+- `tool_words`: for each tool, the words that offer it to the model (`"battery_status": ["battery", "charging"]`). Jarvis only offers the tools whose words your request contains as whole words, in simple forms too ("share" also matches "shares", "rain" matches "raining"), so small talk stays fast and the model picks from just a few. Add a word if a request should trigger a tool but doesn't; an empty list turns the tool off
 - `wake_beep`, `sleep_beep`: the beeps when Jarvis wakes up and goes back to sleep (pitch in `hz`, length in `ms`)
 - `beep_grace_seconds`: how long to ignore the mic after the wake beep, so its echo doesn't start a recording
 - `memory_file`, `log_dir`: where memories and logs are kept, relative to the project folder

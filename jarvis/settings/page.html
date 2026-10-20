@@ -526,7 +526,7 @@ const SECTIONS = [
       { key: "shutdown_phrases", label: "Shut down", type: "chips", placeholder: "Add a phrase…",
         help: "These stop Jarvis completely. They only count as a short command on its own (5 words or fewer), so \"shut down\" works but a longer sentence containing it doesn't." },
       { key: "tool_words", label: "Action words", type: "toolwords", placeholder: "Add a word…",
-        help: "Jarvis only offers a tool when your request contains one of its words as a whole word (\"time\" doesn't count inside \"sometimes\"). That keeps small talk fast and helps the model pick the right tool. Add a word if a request should do something but doesn't; a tool with no words is never used." },
+        help: "Jarvis only offers a tool when your request contains one of its words as a whole word (\"time\" doesn't count inside \"sometimes\"). Simple forms count too: \"share\" also matches \"shares\", \"rain\" matches \"raining\". That keeps small talk fast and helps the model pick the right tool. Add a word if a request should do something but doesn't; a tool with no words is never used." },
     ] },
   ] },
   { id: "websites", title: "Websites & browsers", file: "config", intro: "Shortcuts for the websites you open by voice. Apps need nothing here: Jarvis finds everything in your Start menu.", cards: [

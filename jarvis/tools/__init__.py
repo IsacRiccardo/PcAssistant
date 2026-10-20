@@ -32,6 +32,20 @@ def _arguments(fn, args: dict) -> dict:
     return {k: v for k, v in args.items() if k in takes and not (isinstance(v, dict) and "type" in v)}
 
 
+def _forms(phrase: str) -> set[str]:
+    """The forms of a tool word a request may use, so a list needn't spell each one out: 'share' also
+    matches 'shares', 'rain' 'raining', 'charge' 'charging', 'shares' 'share'. Only the last word of a
+    phrase changes ('dow jones'). Endings come off only if 4 letters stay, so 'news' never matches 'new'."""
+    *start, last = phrase.split()
+    forms = {last, *(last + ending for ending in ("s", "es", "'s", "d", "ed", "ing"))}
+    if last.endswith("e"):
+        forms.add(last[:-1] + "ing")
+    for ending in ("s", "es"):
+        if last.endswith(ending) and len(last) - len(ending) >= 4:
+            forms.add(last[:-len(ending)])
+    return {" ".join([*start, form]) for form in forms}
+
+
 class Tools:
     def __init__(self, cfg: Config, memory: Memory):
         self.cfg = cfg
@@ -45,12 +59,14 @@ class Tools:
         missing = self.by_name.keys() - cfg.tool_words.keys()
         if missing:
             raise SystemExit(f"config.json: 'tool_words' is missing: {', '.join(sorted(missing))}")
+        # every form of every tool word, padded with spaces so they only match whole words
+        self.triggers = {name: {f" {form} " for w in ws for form in _forms(w)} for name, ws in cfg.tool_words.items()}
 
     def offered(self, text: str) -> list | None:
         """The tools whose words the request contains, or None for small talk, which stays fast that way.
         Fewer tools to choose from also means a small model picks the right one more often."""
         text = f" {words(text)} "   # the tool words are in this form too, so accents never matter
-        found = [f for f in self.all if any(f" {w} " in text for w in self.cfg.tool_words[f.__name__])]
+        found = [f for f in self.all if any(t in text for t in self.triggers[f.__name__])]
         return found or None
 
     def begin(self, request: str) -> None:
