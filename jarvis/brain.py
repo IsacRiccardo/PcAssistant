@@ -155,13 +155,27 @@ class Brain:
             return []
         return [m for turn in self.turns[:-1] for m in (turn[0], turn[-1])] + self.turns[-1]
 
+    def _run(self, messages: list, calls: list[tuple[str, dict]], tools: list, content: str = "") -> None:
+        """Run tool calls, adding them and their results to this request's messages and its history."""
+        self.follow_up_tools = tools
+        # a call written as JSON text is recorded as a real one, so the history never shows that habit
+        self.exchange.append(ollama.Message(
+            role="assistant", content=content,
+            tool_calls=[ollama.Message.ToolCall(function=ollama.Message.ToolCall.Function(name=n, arguments=a))
+                        for n, a in calls]))
+        for name, args in calls:
+            result = self.tools.call(name, args)
+            self.exchange.append({"role": "tool", "content": result, "tool_name": name})
+        messages += self.exchange[-1 - len(calls):]
+
     def _reply(self, text: str, language: str | None) -> Iterator[str]:
         if self.tools.email.active:   # answering one of the email questions
             yield self.tools.email.answer(text, language)
             return
 
         # a request without tool words of its own may be a follow-up to the last one ('and microsoft?')
-        tools = self.tools.offered(text) or self.follow_up_tools
+        previous = self.follow_up_tools
+        tools = self.tools.offered(text) or previous
         self.follow_up_tools = None
         # next to the request, where small models actually heed them; history stays clean
         notes = [f"Reply in {languages.name(language)}."] if language else []
@@ -171,6 +185,9 @@ class Brain:
         messages = ([{"role": "system", "content": self.system_prompt()}] + self._history()
                     + [{"role": "user", "content": request}])
         self.tools.begin(text)
+        again = self.tools.again(text, previous)
+        if again:
+            self._run(messages, again, tools)
 
         for round_ in range(self.cfg.max_tool_rounds):
             # While the model may still decide to act, hold its words back until it's clear it isn't
@@ -194,16 +211,7 @@ class Brain:
                     yield content.strip()
                 return
 
-            self.follow_up_tools = tools
-            # a call written as JSON text is recorded as a real one, so the history never shows that habit
-            self.exchange.append(ollama.Message(
-                role="assistant", content=content if raw_calls else "",
-                tool_calls=[ollama.Message.ToolCall(function=ollama.Message.ToolCall.Function(name=n, arguments=a))
-                            for n, a in calls]))
-            for name, args in calls:
-                result = self.tools.call(name, args)
-                self.exchange.append({"role": "tool", "content": result, "tool_name": name})
-            messages += self.exchange[-1 - len(calls):]
+            self._run(messages, calls, tools, content if raw_calls else "")
             if self.tools.email.active:   # an email was started: ask for what's missing, word for word
                 yield self.tools.email.next_question(language)
                 return

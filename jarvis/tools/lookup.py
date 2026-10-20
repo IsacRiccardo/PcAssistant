@@ -7,6 +7,8 @@ from urllib.request import Request, urlopen
 
 import psutil
 
+from ..phrases import words
+
 YAHOO_SEARCH = "https://query1.finance.yahoo.com/v1/finance/search?quotesCount=1&newsCount=0&q={}"
 YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/{}?range=1d&interval=1d"
 # Open-Meteo: free, no API key
@@ -44,12 +46,56 @@ def battery_status() -> str:
     return f"{b.percent:.0f}% and {state}."
 
 
-def get_weather(city: str) -> str:
-    """Get the current weather and the forecast for the next 7 days in a city.
+WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+WEEK_WORDS = {"week", "weekly", "forecast", "days"}
+DAY_WORDS = {*WEEKDAYS, *WEEK_WORDS, "today", "tonight", "tomorrow", "weekend"}
+# words a follow-up that only changes the day may hold besides the day: 'and what about on friday?'
+FOLLOW_UP_WORDS = {"and", "what", "what's", "whats", "about", "how", "how's", "hows", "on", "the", "for", "this",
+                   "next", "then", "so", "ok", "okay", "is", "it", "will", "be", "like", "there", "day", "after"}
 
-    Args:
-      city: The city name, for example 'Milan'
-    """
+
+def _days_asked(request: str, dates: list[str]) -> list[int] | None:
+    """Which forecast days the request is about, as indexes into dates (today first); None for
+    right now and today. Small models read out every line they're given, so they get only these."""
+    asked = set(words(request).split())
+    names = [datetime.date.fromisoformat(d).strftime("%A").lower() for d in dates]
+    days = [i for i, name in enumerate(names) if name in asked]
+    if days:
+        return days
+    if "weekend" in asked:
+        return [i for i, name in enumerate(names) if name in ("saturday", "sunday")][:2]
+    if "tomorrow" in asked:
+        return [1]
+    if asked & WEEK_WORDS:
+        return list(range(len(dates)))
+    return None
+
+
+class Weather:
+    def __init__(self):
+        self.request = ""   # what the user just said, set by Tools.begin
+        self.city = None    # the last city asked about
+
+    def get_weather(self, city: str) -> str:
+        """Get the weather in a city: right now, or the forecast for the days the user asks about.
+
+        Args:
+          city: The city name, for example 'Milan'
+        """
+        self.city = city
+        return _weather(city, self.request)
+
+    def again(self, request: str, also: set[str]) -> dict | None:
+        """The arguments to get the weather again for a follow-up that only changes the day, like
+        'and tomorrow?' or 'what about Friday?': the last city. None for anything else.
+        also: more words such a follow-up may hold, like 'rain' in 'will it rain on Friday?'."""
+        asked = set(words(request).split())
+        if self.city and asked & DAY_WORDS and not asked - DAY_WORDS - FOLLOW_UP_WORDS - also:
+            return {"city": self.city}
+        return None
+
+
+def _weather(city: str, request: str) -> str:
     try:
         # the geocoder finds 'Milan' but not 'Milan, Italy', so fall back to the part before the comma
         places = _get_json(GEOCODE.format(quote_plus(city))).get("results") \
@@ -60,15 +106,25 @@ def get_weather(city: str) -> str:
         w = _get_json(FORECAST.format(p["latitude"], p["longitude"]))
         sky = lambda code: WEATHER_CODES.get(code, "unknown weather")
         now, daily = w["current"], w["daily"]
-        lines = [f"Weather in {p['name']}, {p.get('country', '')} now: {now['temperature_2m']:.0f} degrees "
-                 f"(feels like {now['apparent_temperature']:.0f} degrees), {sky(now['weather_code'])}, "
-                 f"wind {now['wind_speed_10m']:.0f} km/h."]
-        for i, day in enumerate(daily["time"]):
-            name = ("Today", "Tomorrow")[i] if i < 2 else datetime.date.fromisoformat(day).strftime("%A")
+
+        def day(i: int) -> str:
+            name = datetime.date.fromisoformat(daily["time"][i]).strftime("%A")
+            if i < 2:   # 'Tuesday (today)': with the real name too, small models don't mislabel the days
+                name += (" (today)", " (tomorrow)")[i]
             rain = daily["precipitation_probability_max"][i]
-            lines.append(f"{name}: {sky(daily['weather_code'][i])}, {daily['temperature_2m_min'][i]:.0f} to "
-                         f"{daily['temperature_2m_max'][i]:.0f} degrees" + (f", {rain}% chance of rain" if rain is not None else ""))
-        return "\n".join(lines)
+            return (f"{name}: {sky(daily['weather_code'][i])}, {daily['temperature_2m_min'][i]:.0f} to "
+                    f"{daily['temperature_2m_max'][i]:.0f} degrees" + (f", {rain}% chance of rain" if rain is not None else ""))
+
+        # only the days asked about: small models read out every line they're given
+        place = f"{p['name']}, {p.get('country', '')}"
+        days = _days_asked(request, daily["time"])
+        if days and len(days) == len(daily["time"]):
+            return "\n".join([f"Forecast for {place}:", *map(day, days), "Sum up the week in two or three sentences."])
+        if days:
+            return "\n".join([f"Forecast for {place}:", *map(day, days), "Answer in one or two sentences."])
+        return "\n".join([f"Weather in {place} now: {now['temperature_2m']:.0f} degrees (feels like "
+                          f"{now['apparent_temperature']:.0f} degrees), {sky(now['weather_code'])}, "
+                          f"wind {now['wind_speed_10m']:.0f} km/h.", day(0), "Answer in one or two sentences."])
     except Exception as e:
         return f"Couldn't get the weather: {e}"
 

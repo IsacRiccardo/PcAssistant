@@ -14,7 +14,7 @@ from ..memory import Memory
 from ..phrases import words
 from .email import EmailComposer
 from .launcher import Launcher
-from .lookup import battery_status, get_stock_price, get_time, get_weather, web_lookup
+from .lookup import Weather, battery_status, get_stock_price, get_time, web_lookup
 
 log = logging.getLogger("jarvis")
 
@@ -52,8 +52,9 @@ class Tools:
         self.memory = memory
         self.launcher = Launcher(cfg)
         self.email = EmailComposer(cfg)
+        self.weather = Weather()
         self.all = [get_time, self.launcher.open_app, self.launcher.close_app, self.launcher.open_website,
-                    self.launcher.search_web, self.email.compose_email, get_weather,
+                    self.launcher.search_web, self.email.compose_email, self.weather.get_weather,
                     get_stock_price, web_lookup, battery_status, self.remember]
         self.by_name = {f.__name__: f for f in self.all}
         missing = self.by_name.keys() - cfg.tool_words.keys()
@@ -69,9 +70,20 @@ class Tools:
         found = [f for f in self.all if any(t in text for t in self.triggers[f.__name__])]
         return found or None
 
+    def again(self, request: str, previous: list | None) -> list[tuple[str, dict]]:
+        """Calls to make before the model answers. A follow-up that only changes the day, like 'and
+        tomorrow?' right after the weather, gets that day for the same city: small models answer those
+        from the last result instead, and make the numbers up. previous: the last request's tools."""
+        if previous and self.weather.get_weather in previous:
+            also = {w for w in self.cfg.tool_words["get_weather"] if " " not in w}   # 'will it rain on friday?'
+            args = self.weather.again(request, also)
+            if args:
+                return [("get_weather", args)]
+        return []
+
     def begin(self, request: str) -> None:
         """A new request: tools can check the model's arguments against what the user actually said."""
-        self.launcher.request = request
+        self.launcher.request = self.weather.request = request
 
     def call(self, name: str, args: dict) -> str:
         fn = self.by_name.get(name)
