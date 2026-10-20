@@ -68,7 +68,9 @@ class Brain:
         self.cfg = cfg
         self.tools = tools
         self.memory = memory
-        self.history = []
+        self.turns = []      # each: the request, the tool calls and results, the reply
+        self.exchange = []   # the tool calls and results of the request being answered
+        self.follow_up_tools = None   # the last request's tools, if it used one: 'of apple?' after a stock price
 
     @property
     def dictating(self) -> bool:
@@ -124,8 +126,10 @@ class Brain:
             log.warning("Couldn't warm up the model: %s", e)
 
     def end_conversation(self) -> None:
-        """Jarvis went back to sleep: drop a half-written email so the next request doesn't land in it."""
+        """Jarvis went back to sleep: drop a half-written email so the next request doesn't land in it,
+        and don't treat the next request as a follow-up."""
         self.tools.email.cancel()
+        self.follow_up_tools = None
 
     def ask(self, text: str, language: str | None = None) -> str:
         """The whole reply at once."""
@@ -135,25 +139,36 @@ class Brain:
         """The reply, one sentence at a time as the model writes it, so speaking can start early.
         language is the one the user spoke in ('de'), if known; the reply is in it too."""
         spoken = []
+        self.exchange = []
         for sentence in self._reply(text, language):
             spoken.append(sentence)
             yield sentence
-        self.history += [{"role": "user", "content": text},
-                         {"role": "assistant", "content": " ".join(spoken)}]
-        self.history = self.history[-self.cfg.history_turns * 2:]
+        self.turns.append([{"role": "user", "content": text}, *self.exchange,
+                           {"role": "assistant", "content": " ".join(spoken)}])
+        self.turns = self.turns[-self.cfg.history_turns:]
+
+    def _history(self) -> list:
+        """Earlier turns as what was asked and answered. The last one also keeps its tool calls and
+        results: seeing only 'NVIDIA is at $216', small models answer 'and apple?' with a made-up
+        price instead of calling the tool again. Only the last one, so the context stays small."""
+        if not self.turns:
+            return []
+        return [m for turn in self.turns[:-1] for m in (turn[0], turn[-1])] + self.turns[-1]
 
     def _reply(self, text: str, language: str | None) -> Iterator[str]:
         if self.tools.email.active:   # answering one of the email questions
             yield self.tools.email.answer(text, language)
             return
 
-        tools = self.tools.offered(text)
+        # a request without tool words of its own may be a follow-up to the last one ('and microsoft?')
+        tools = self.tools.offered(text) or self.follow_up_tools
+        self.follow_up_tools = None
         # next to the request, where small models actually heed them; history stays clean
         notes = [f"Reply in {languages.name(language)}."] if language else []
         if tools is None:
             notes.append(NO_TOOLS)
         request = f"{text}\n\n({' '.join(notes)})" if notes else text
-        messages = ([{"role": "system", "content": self.system_prompt()}] + self.history
+        messages = ([{"role": "system", "content": self.system_prompt()}] + self._history()
                     + [{"role": "user", "content": request}])
         self.tools.begin(text)
 
@@ -179,10 +194,16 @@ class Brain:
                     yield content.strip()
                 return
 
-            messages.append(ollama.Message(role="assistant", content=content, tool_calls=raw_calls or None))
+            self.follow_up_tools = tools
+            # a call written as JSON text is recorded as a real one, so the history never shows that habit
+            self.exchange.append(ollama.Message(
+                role="assistant", content=content if raw_calls else "",
+                tool_calls=[ollama.Message.ToolCall(function=ollama.Message.ToolCall.Function(name=n, arguments=a))
+                            for n, a in calls]))
             for name, args in calls:
                 result = self.tools.call(name, args)
-                messages.append({"role": "tool", "content": result, "tool_name": name})
+                self.exchange.append({"role": "tool", "content": result, "tool_name": name})
+            messages += self.exchange[-1 - len(calls):]
             if self.tools.email.active:   # an email was started: ask for what's missing, word for word
                 yield self.tools.email.next_question(language)
                 return
