@@ -437,6 +437,7 @@ const TOOL_LABELS = {   // the tools in jarvis/tools/, by function name
   get_weather: "Weather", get_stock_price: "Stock and crypto prices", web_lookup: "Look up news and facts",
   battery_status: "Battery", remember: "Remember a fact",
   set_volume: "Volume", set_brightness: "Screen brightness", computer_power: "Shut down, restart, sleep, lock",
+  find_files: "Find files", open_file: "Open a file", show_in_folder: "Show a file in its folder",
 };
 
 // ---------------------------------------------------------------- what's on each page
@@ -508,7 +509,7 @@ const SECTIONS = [
     ] },
     { title: "Microphone and timing", fields: [
       { key: "silence_level", label: "Silence level", type: "silence", min: 1, max: 32767, range: [50, 3000], step: 10, integer: true,
-        help: "Sound quieter than this counts as silence. Raise it if Jarvis never stops recording in a noisy room; lower it if it cuts you off." },
+        help: "How loud you must be for Jarvis to notice you started talking. Once you have, quieter speech still counts, as long as it sounds like speech. Raise it if Jarvis starts recording from background noise; lower it if it doesn't notice you." },
       { key: "silence_seconds", label: "Pause that ends a command", type: "slider", min: 0.1, max: 10, range: [0.3, 4], step: 0.1, unit: "s",
         help: "How long you stay quiet before Jarvis treats the command as finished. Lower is snappier; raise it if Jarvis cuts you off when you pause mid-sentence." },
       { key: "no_speech_seconds", label: "Time to start talking", type: "slider", min: 0.5, max: 60, range: [1, 30], step: 0.5, unit: "s",
@@ -519,8 +520,8 @@ const SECTIONS = [
         help: "Recording stops after this long, even if you're still talking." },
     ] },
     { title: "Beeps", fields: [
-      { key: "wake_beep", label: "Wake beep", type: "beep", help: "Plays when Jarvis wakes up, if it has no reply to say (Reply when woken, above)." },
-      { key: "sleep_beep", label: "Sleep beep", type: "beep", help: "Plays when Jarvis goes back to sleep, if it has nothing to say (Commands > Reply when going to sleep)." },
+      { key: "wake_beep", label: "Wake beep", type: "beep", help: "Plays when Jarvis wakes up, if it has no reply to say (Reply when woken, above). A length of 0 is silent." },
+      { key: "sleep_beep", label: "Sleep beep", type: "beep", help: "Plays when Jarvis goes back to sleep, if it has nothing to say (Commands > Reply when going to sleep). A length of 0 is silent." },
       { key: "beep_grace_seconds", label: "Ignore the microphone after the beep", type: "slider", min: 0, max: 5, range: [0, 2], step: 0.05, unit: "s",
         help: "So the beep's own echo doesn't start a recording." },
     ] },
@@ -662,7 +663,7 @@ function problem(f) {
       return isHex(v) ? "" : "Use a colour like #00e5ff.";
     case "beep":
       return numProblem(v?.hz, { min: 37, max: 32767, integer: true }, "Pitch")
-          || numProblem(v?.ms, { min: 10, max: 5000, integer: true }, "Length");
+          || numProblem(v?.ms, { min: 0, max: 5000, integer: true }, "Length");
     case "states": {
       const [colors, spin] = v;
       for (const s of STATES) {

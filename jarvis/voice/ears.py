@@ -16,6 +16,16 @@ log = logging.getLogger("jarvis")
 
 SAMPLE_RATE = 16000
 CHUNK = 1280            # 80 ms of audio, the frame size openWakeWord expects
+VAD_WINDOW = 512        # samples the speech detector judges at a time
+VAD_SAMPLES = 8 * VAD_WINDOW   # the newest audio it's given for each chunk, a quarter second
+SPEECH_PROBABILITY = 0.5       # how sure it must be that it hears speech
+QUIET_FLOOR = 0.25      # share of silence_level below which even speech counts as silence, like a far-off TV
+
+
+def _beep(beep: tuple[int, int]) -> None:
+    """A (Hz, ms) beep; a length of 0 is silence."""
+    if beep[1] > 0:
+        winsound.Beep(*beep)
 
 
 def _load_whisper(name: str):
@@ -62,6 +72,8 @@ class Ears:
         if len(cfg.languages) > 1 and self.whisper.model.is_multilingual:
             self.picker = self.whisper.model = LanguagePicker(self.whisper.model, cfg.languages)
         self.wake = Model(wakeword_models=list(cfg.wake_word), inference_framework="onnx")   # one score per wake word
+        from faster_whisper.vad import get_vad_model
+        self.vad = get_vad_model()   # the speech detector Whisper itself uses, to know when the user stops
         self.chunks = queue.Queue()   # microphone audio, CHUNK samples at a time, as it comes in
         self.transcribe(np.zeros(SAMPLE_RATE, np.float32))   # loads the speech detector now, not on the first command
         log.info("Speech models loaded")
@@ -77,27 +89,45 @@ class Ears:
         while not self.chunks.empty():
             self.chunks.get_nowait()
 
+    def _hears_speech(self, frames: list[np.ndarray]) -> bool:
+        """Whether the newest audio is someone talking, by the speech detector rather than loudness:
+        the end of a word, or a quieter 'from desktop', is often below silence_level."""
+        recent = np.concatenate(frames[-(VAD_SAMPLES // CHUNK + 1):])[-VAD_SAMPLES:].astype(np.float32) / 32768.0
+        recent = np.pad(recent, (VAD_SAMPLES - len(recent), 0))
+        newest = CHUNK // VAD_WINDOW + 1   # the windows the newest chunk falls in
+        return float(np.max(self.vad(recent)[-newest:])) >= SPEECH_PROBABILITY
+
     def record_command(self, wait_seconds: float) -> np.ndarray | None:
-        """Record until the user stops talking. None if they never started within wait_seconds."""
-        frames, silent, started = [], 0, False
+        """Record until the user stops talking. None if they never started within wait_seconds.
+        Talking starts when it's louder than silence_level; it ends after silence_seconds without
+        speech. Once they're talking, quieter speech still counts, if the speech detector hears it."""
+        frames, silent, started, loudest = [], 0, False, 0.0
         per_sec = SAMPLE_RATE / CHUNK
         max_chunks = int(self.cfg.max_command_seconds * per_sec)
         silence_chunks = int(self.cfg.silence_seconds * per_sec)
         no_speech_chunks = int(wait_seconds * per_sec)
         grace_chunks = int(self.cfg.beep_grace_seconds * per_sec)
+        ended = "the time limit"
         for _ in range(max_chunks):
             chunk = self.chunks.get()
             frames.append(chunk)
             if len(frames) <= grace_chunks:   # the echo of the wake beep or reply, not the user talking
                 continue
-            if np.abs(chunk).mean() > self.cfg.silence_level:
+            level = float(np.abs(chunk).mean())
+            loudest = max(loudest, level)
+            talking = level > self.cfg.silence_level or (
+                started and level > self.cfg.silence_level * QUIET_FLOOR and self._hears_speech(frames))
+            if talking:
                 started, silent = True, 0
             else:
                 silent += 1
             if started and silent >= silence_chunks:
+                ended = "silence"
                 break
             if not started and len(frames) > no_speech_chunks:
                 return None
+        log.info("Recorded %.1f s, loudest %.0f (silence_level %d), ended by %s",
+                 len(frames) / per_sec, loudest, self.cfg.silence_level, ended)
         return np.concatenate(frames).astype(np.float32) / 32768.0
 
     def transcribe(self, audio: np.ndarray) -> tuple[str, str]:
@@ -111,8 +141,10 @@ class Ears:
         text = " ".join(s.text for s in segments).strip()   # the picker picks while this runs
         return text, self.picker.picked if self.picker else info.language
 
-    def converse(self, on_command: Callable[[str, str], None], dictating: Callable[[], bool]) -> bool:
+    def converse(self, on_command: Callable[[str, str], None], dictating: Callable[[], bool],
+                 waiting: Callable[[], bool]) -> bool:
         """After the wake word, keep taking commands until the user goes quiet or says 'that's all'.
+        While waiting() is True, like when a list is up to pick from, going quiet doesn't end it.
         Returns True if the user asked Jarvis to shut down."""
         wait = self.cfg.no_speech_seconds
         while True:
@@ -120,6 +152,8 @@ class Ears:
             self.status.set_state("listening")
             audio = self.record_command(wait)
             if audio is None:
+                if waiting():   # still up to the user: they may pick with the mouse, or say which
+                    continue
                 return False
             self.status.set_state("thinking")
             text, language = self.transcribe(audio)
@@ -141,10 +175,12 @@ class Ears:
             wait = self.cfg.follow_up_seconds
 
     def listen_until_shutdown(self, on_command: Callable[[str, str], None], on_sleep: Callable[[], None],
-                              dictating: Callable[[], bool], wake_reply: Callable[[], None] | None = None,
+                              dictating: Callable[[], bool], waiting: Callable[[], bool] = lambda: False,
+                              wake_reply: Callable[[], None] | None = None,
                               sleep_reply: Callable[[], None] | None = None) -> None:
         """on_command(text, language) handles each request, on_sleep() runs when a conversation ends,
-        dictating() is True while the user is answering a question like the email ones.
+        dictating() is True while the user is answering a question like the email ones, waiting() while
+        Jarvis waits for them to do something, like pick from a list, and mustn't go back to sleep.
         wake_reply() answers the wake word, sleep_reply() says Jarvis is going back to sleep; without
         them, a short beep."""
         phrase = " or ".join(f'"{wake_phrase(w)}"' for w in self.cfg.wake_word)
@@ -160,9 +196,9 @@ class Ears:
                 if wake_reply:
                     wake_reply()
                 else:
-                    winsound.Beep(*self.cfg.wake_beep)
+                    _beep(self.cfg.wake_beep)
                 self._drain()       # ignore the wake word's tail, and Jarvis's own answer to it
-                if self.converse(on_command, dictating):
+                if self.converse(on_command, dictating, waiting):
                     log.info("Shutdown requested")
                     return
                 on_sleep()
@@ -170,7 +206,7 @@ class Ears:
                     sleep_reply()   # said while the orb is still up; it leaves right after
                 self.status.set_state("sleeping")
                 if not sleep_reply:
-                    winsound.Beep(*self.cfg.sleep_beep)
+                    _beep(self.cfg.sleep_beep)
                 print(f"(sleeping - say {phrase})", flush=True)
                 self._drain()
                 self.wake.reset()

@@ -10,6 +10,7 @@ import threading
 import time
 import webbrowser
 import winreg
+from collections.abc import Callable
 from ctypes import wintypes
 from urllib.parse import quote_plus
 
@@ -128,9 +129,10 @@ def _start(*args: str) -> None:
 
 
 class Launcher:
-    def __init__(self, cfg: Config):
+    def __init__(self, cfg: Config, open_document: Callable[[str], str | None] | None = None):
         self.cfg = cfg
         self.request = ""   # what the user just said, set by Tools.begin
+        self.open_document = open_document   # for 'open my resume': a file, when no app has that name
         # this PC's apps (Start menu name -> what opens it), looked up fresh each launch since every
         # PC has different ones; that takes a few seconds, so it runs in the background
         self.apps: dict[str, str] = {}
@@ -157,6 +159,12 @@ class Launcher:
         app = self._match(key)
         return self.apps[app] if app else None
 
+    def knows(self, name: str) -> bool:
+        """Whether this is an app on this PC or a site name, so 'open' means it rather than a file."""
+        self._scanning.join()
+        key = name.lower().strip()
+        return key in self.cfg.sites or self._find(key) is not None
+
     def open_app(self, name: str) -> str:
         """Open an application on this Windows PC.
 
@@ -174,7 +182,8 @@ class Launcher:
             self._scan_start_menu()
             target = self._find(key)
         if target is None:
-            return f"Failed: {name} isn't installed on this PC."
+            opened = self.open_document(name) if self.open_document else None
+            return opened or f"Failed: {name} isn't installed on this PC."
         try:
             if target.startswith("shell:"):
                 os.startfile(target)   # straight to Windows, so no cmd quoting to trip over

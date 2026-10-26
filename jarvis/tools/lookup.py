@@ -101,10 +101,10 @@ def _weather_report(city: str, request: str) -> str:
         return "\n".join([f"Weather in {where} now: {now['temperature_2m']:.0f} degrees (feels like "
                           f"{now['apparent_temperature']:.0f} degrees), {_sky(now['weather_code'])}, "
                           f"wind {now['wind_speed_10m']:.0f} km/h.",
-                          _describe_day(daily, 0), "Answer in one or two sentences."])
+                          _describe_day(daily, 0), "Answer in one short sentence."])
     whole_week = len(days) == len(daily["time"])
     return "\n".join([f"Forecast for {where}:", *(_describe_day(daily, i) for i in days),
-                      "Sum up the week in two or three sentences." if whole_week else "Answer in one or two sentences."])
+                      "Sum up the week in two short sentences." if whole_week else "Answer in one short sentence."])
 
 
 def _find_place(city: str) -> dict | None:

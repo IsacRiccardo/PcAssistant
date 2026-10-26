@@ -220,7 +220,8 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/beep":
                 import winsound
                 body = self._body()
-                winsound.Beep(int(body["hz"]), int(body["ms"]))
+                if int(body["ms"]) > 0:   # 0 is silence
+                    winsound.Beep(int(body["hz"]), int(body["ms"]))
                 self._json({})
             else:
                 self._json({"error": "Not found"}, 404)

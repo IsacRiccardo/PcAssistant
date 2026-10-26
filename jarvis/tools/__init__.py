@@ -13,11 +13,19 @@ from ..config import Config
 from ..memory import Memory
 from ..phrases import words
 from .email import EmailComposer
+from .files import FileSearch
 from .launcher import Launcher
 from .lookup import Weather, battery_status, get_stock_price, get_time, web_lookup
 from .system import Power, level_asked, set_brightness, set_volume
 
 log = logging.getLogger("jarvis")
+
+# What Jarvis says itself when one of these worked, since the model would go on about it:
+# tool -> (how its result starts when it worked, the reply). The file tools set their own (FileSearch.reply).
+DONE_REPLIES = {
+    "open_app": ("Opened ", "It's open."),
+    "open_website": ("Opened ", "It's open."),
+}
 
 
 def _clean_arguments(fn, args: dict) -> dict:
@@ -51,14 +59,16 @@ class Tools:
     def __init__(self, cfg: Config, memory: Memory):
         self.cfg = cfg
         self.memory = memory
-        self.launcher = Launcher(cfg)
+        self.files = FileSearch()
+        self.launcher = Launcher(cfg, self.files.open_document)
         self.email = EmailComposer(cfg)
         self.weather = Weather()
         self.power = Power()
         self.functions = [get_time, self.launcher.open_app, self.launcher.close_app, self.launcher.open_website,
                           self.launcher.search_web, self.email.compose_email, self.weather.get_weather,
                           get_stock_price, web_lookup, battery_status, self.remember,
-                          set_volume, set_brightness, self.power.computer_power]
+                          set_volume, set_brightness, self.power.computer_power,
+                          self.files.find_files, self.files.open_file, self.files.show_in_folder]
         self.by_name = {f.__name__: f for f in self.functions}
         missing = self.by_name.keys() - cfg.tool_words.keys()
         if missing:
@@ -88,6 +98,19 @@ class Tools:
             args = self.weather.follow_up_args(request, also)
             if args:
                 return [("get_weather", args)]
+        # 'open the second one' or 'where is it?' right after a file search
+        pick = self.files.follow_up(request)
+        if pick:
+            return [pick]
+        # 'find my resume', 'open my resume': small models answer that they can't, or call open_app
+        # only for apps, so a plain file request is carried out without them
+        find = self.files.asked_to_find(request)
+        if find:
+            return [("find_files", find)]
+        said = self.files.asked_to_open(request, set(self.cfg.browsers))   # 'a png from my downloads'
+        args = self.files.open_args(said) if said and not self.launcher.knows(said) else None
+        if args:
+            return [("open_file", args)]
         # 'set the volume to 30', 'a bit more', 'mute', 'make the screen brighter'
         offered = offered or []
         if (set_volume in offered) != (set_brightness in offered):   # one of the two, so 'up' is clear
@@ -107,6 +130,7 @@ class Tools:
 
     def call(self, name: str, args: dict) -> str:
         fn = self.by_name.get(name)
+        self.files.reply = None   # only this call's counts
         if fn is None:
             result = f"Failed: there is no tool called {name}. Use one of: {', '.join(self.by_name)}."
         else:
@@ -116,6 +140,15 @@ class Tools:
                 result = f"Failed: {e}"
         log.info("[tool] %s(%s) -> %s", name, args, result)
         return str(result)
+
+    def done_reply(self, results: list[tuple[str, str]]) -> tuple[str, dict] | None:
+        """What Jarvis says itself after these (tool name, result) pairs, as (sentence, its values):
+        'It's open.', or the files it found. None for the model to word them, like when one failed."""
+        if len(results) == 1 and self.files.reply:   # a file tool, or open_app that opened a file
+            return self.files.reply
+        worked = all(name in DONE_REPLIES and result.startswith(DONE_REPLIES[name][0]) for name, result in results)
+        replies = {DONE_REPLIES[name][1] for name, _ in results if name in DONE_REPLIES}
+        return (replies.pop(), {}) if results and worked and len(replies) == 1 else None
 
     def remember(self, fact: str) -> str:
         """Save a fact about the user to long-term memory, when the user asks you to remember something.

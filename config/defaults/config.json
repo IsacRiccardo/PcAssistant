@@ -1,60 +1,39 @@
 {
   "user_name": "",
   "user_title": "",
-  "personality": "You are Jarvis, a witty, loyal and efficient personal assistant running locally on the user's Windows laptop. You can open and close apps, open websites, search the web, check the time, battery, weather and stock prices, and remember facts the user tells you.",
+  "piper_voices": ["en_US-lessac-medium"],
   "greeting": "Jarvis online. How can I help?",
   "farewell": "Shutting down. Goodbye.",
+  "personality": "You are Jarvis, a witty, loyal and efficient personal assistant running locally on the user's Windows laptop. You can open and close apps, open websites, search the web, find and open files on this PC, check the time, battery, weather and stock prices, and remember facts the user tells you.",
 
-  "model_plugged_in": "llama3.2:3b",
-  "model_on_battery": "llama3.2:1b",
+  "model_plugged_in": "qwen2.5:3b",
+  "model_on_battery": "qwen2.5:3b",
+  "temperature": 0.6,
+  "history_turns": 6,
+  "max_tool_rounds": 3,
   "context_size": 2048,
   "keep_alive": "30m",
-  "history_turns": 6,
-  "temperature": 0.6,
-  "max_tool_rounds": 3,
 
   "wake_word": ["hey_jarvis"],
   "wake_threshold": 0.5,
   "wake_reply": ["Yes?"],
   "whisper_model": "small",
   "languages": ["en"],
-
   "silence_level": 500,
   "silence_seconds": 1.5,
-  "no_speech_seconds": 6.0,
-  "follow_up_seconds": 8.0,
+  "no_speech_seconds": 6,
+  "follow_up_seconds": 8,
   "max_command_seconds": 20,
   "wake_beep": { "hz": 880, "ms": 120 },
   "sleep_beep": { "hz": 440, "ms": 120 },
-  "sleep_reply": ["Going to sleep."],
   "beep_grace_seconds": 0.3,
-  "sleep_phrases": [
-    "that's all", "that is all", "stop listening", "go to sleep", "goodbye", "never mind"
-  ],
+
+  "sleep_phrases": ["that's all", "that is all", "stop listening", "go to sleep", "goodbye"],
+  "sleep_reply": ["Going to sleep."],
   "shutdown_phrases": [
     "shut down", "shutdown", "power off", "power down", "go offline", "turn yourself off",
     "exit jarvis", "quit jarvis"
   ],
-
-  "piper_voices": ["en_US-lessac-medium"],
-
-  "memory_file": "data/memory.json",
-  "log_dir": "logs",
-  "ui_config": "config/ui.json",
-
-  "sites": {
-    "gmail": "mail.google.com",
-    "youtube": "youtube.com"
-  },
-
-  "contacts": {},
-
-  "browsers": {
-    "firefox": { "command": "firefox", "args": ["-new-tab"], "new_tab": "about:newtab" },
-    "chrome":  { "command": "chrome", "args": ["-new-tab"], "new_tab": "chrome://newtab" },
-    "edge":    { "command": "msedge", "args": ["-new-tab"], "new_tab": "edge://newtab" }
-  },
-
   "tool_words": {
     "get_time": ["time", "date", "day", "clock", "o'clock"],
     "open_app": ["open", "launch", "start"],
@@ -63,8 +42,8 @@
     "search_web": ["search", "google"],
     "compose_email": ["email", "e-mail", "mail", "compose", "send", "write to"],
     "get_weather": [
-      "weather", "forecast", "temperature", "degrees", "rain", "raining", "snow", "snowing", "sunny", "cold",
-      "hot", "warm", "freezing", "windy", "umbrella"
+      "weather", "forecast", "temperature", "degrees", "rain", "raining", "snow", "snowing", "sunny",
+      "cold", "hot", "warm", "freezing", "windy", "umbrella"
     ],
     "get_stock_price": [
       "price", "prices", "stock", "stocks", "shares", "market", "crypto", "bitcoin", "ethereum",
@@ -79,8 +58,27 @@
     "set_volume": ["volume", "louder", "quieter", "mute", "unmute", "sound", "loud", "quiet"],
     "set_brightness": ["brightness", "brighter", "dimmer", "dim", "darker", "bright"],
     "computer_power": [
-      "shut down", "shutdown", "turn off", "power off", "switch off", "restart", "reboot", "sleep", "suspend",
-      "lock", "sign out", "log out", "log off", "cancel", "abort"
-    ]
-  }
+      "shut down", "shutdown", "turn off", "power off", "switch off", "restart", "reboot", "sleep",
+      "suspend", "lock", "sign out", "log out", "log off", "cancel", "abort"
+    ],
+    "find_files": [
+      "find", "locate", "look for", "where is my", "where's my", "where are my", "file", "files",
+      "document", "documents", "folder", "pdf"
+    ],
+    "open_file": ["file", "document", "folder", "pdf", "spreadsheet", "presentation"],
+    "show_in_folder": ["folder", "location", "where it is"]
+  },
+
+  "sites": { "gmail": "mail.google.com", "youtube": "youtube.com" },
+  "browsers": {
+    "firefox": { "command": "firefox", "args": ["-new-tab"], "new_tab": "about:newtab" },
+    "chrome": { "command": "chrome", "args": ["-new-tab"], "new_tab": "chrome://newtab" },
+    "edge": { "command": "msedge", "args": ["-new-tab"], "new_tab": "edge://newtab" }
+  },
+
+  "contacts": {},
+
+  "memory_file": "data/memory.json",
+  "log_dir": "logs",
+  "ui_config": "config/ui.json"
 }

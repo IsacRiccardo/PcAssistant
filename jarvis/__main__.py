@@ -43,7 +43,7 @@ def setup_logging(log_dir: Path, debug: bool) -> None:
     else:
         warnings.simplefilter("ignore")                   # library warnings would only clutter the terminal
     logging.basicConfig(level=logging.INFO, handlers=handlers)
-    for noisy in ("httpx", "httpcore"):                   # skip one line per Ollama request
+    for noisy in ("httpx", "httpcore", "comtypes"):       # skip one line per Ollama request, and COM's setup
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
@@ -91,6 +91,7 @@ def run_voice(cfg: Config, brain: Brain, no_ui: bool) -> None:
     from .ui import Status
 
     status = Status() if no_ui else make_hud(cfg)
+    brain.tools.files.screen = status   # several files found: a list to click one of, over the orb
 
     def voice():
         from .voice import Ears, Mouth
@@ -113,6 +114,7 @@ def run_voice(cfg: Config, brain: Brain, no_ui: bool) -> None:
             mouth.say(random.choice(cfg.sleep_reply))
 
         ears.listen_until_shutdown(answer, on_sleep=brain.end_conversation, dictating=lambda: brain.dictating,
+                                   waiting=lambda: status.choosing,   # a list of files is up to pick from
                                    wake_reply=answer_wake_word if cfg.wake_reply else None,   # None: a beep
                                    sleep_reply=say_going_to_sleep if cfg.sleep_reply else None)
         mouth.say(cfg.farewell)

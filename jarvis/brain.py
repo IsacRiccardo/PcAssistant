@@ -27,7 +27,7 @@ from .tools import Tools
 log = logging.getLogger("jarvis")
 
 RULES = (
-    "Your replies are spoken aloud, so keep them short (1-3 sentences), "
+    "Your replies are spoken aloud, so keep them short, one or two sentences. "
     "with no markdown, lists or emojis. Reply in the language the user speaks. Use a tool only when the user asks for an action "
     "or for live information.\n"
     "You have no internet access except through your tools. Never say you are looking "
@@ -44,6 +44,7 @@ NO_TOOLS = (
     "ask them to say it directly, for example 'open gmail'."
 )
 SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+MAX_SENTENCES = 2   # the most Jarvis says: small models go on and on about 'tell me about the moon' whatever they're told
 
 ToolCall = tuple[str, dict]   # (tool name, arguments)
 
@@ -148,6 +149,7 @@ class Brain:
         """Jarvis went back to sleep: drop a half-written email so the next request doesn't land in it,
         and don't treat the next request as a follow-up."""
         self.tools.email.cancel()
+        self.tools.files.forget()
         self.follow_up_tools = None
 
     def ask(self, text: str, language: str | None = None) -> str:
@@ -159,9 +161,13 @@ class Brain:
         language is the one the user spoke in ('de'), if known; the reply is in it too."""
         spoken = []
         self.tool_messages = []
-        for sentence in self._reply(text, language):
+        sentences = self._reply(text, language)
+        for sentence in sentences:
             spoken.append(sentence)
             yield sentence
+            if len(spoken) == MAX_SENTENCES:
+                sentences.close()   # stops the model too
+                break
         self.turns.append([{"role": "user", "content": text}, *self.tool_messages,
                            {"role": "assistant", "content": " ".join(spoken)}])
         self.turns = self.turns[-self.cfg.history_turns:]
@@ -189,7 +195,11 @@ class Brain:
         model_tools = None if direct else tools
         messages = self._messages(text, language, model_tools, acted=bool(direct))
         if direct:
-            self._run_tools(messages, direct, tools)
+            done = self._run_tools(messages, direct, tools)
+            if done:   # 'It's open.': nothing for the model to add
+                sentence, values = done
+                yield languages.translate(language, sentence, **values)
+                return
 
         for round_number in range(self.cfg.max_tool_rounds):
             # While the model may still decide to act, hold its words back until it's clear it isn't
@@ -197,9 +207,22 @@ class Brain:
             # each sentence as soon as it's written.
             speak_as_written = model_tools is None or round_number > 0
             calls, said_with_calls = yield from self._ask_model(messages, model_tools, speak_as_written)
+            if not calls and not said_with_calls.strip():
+                # Nothing at all: the model went for a tool it wasn't offered, usually the one it used
+                # last time, and Ollama dropped the call. Once more, offering that one too.
+                missing = [t for t in previous_tools or [] if t not in (model_tools or [])]
+                if missing and model_tools is not None:
+                    model_tools = tools = model_tools + missing
+                    continue
+                yield languages.translate(language, "Sorry, I didn't catch that. Could you say it again?")
+                return
             if not calls:
                 return
-            self._run_tools(messages, calls, tools, said_with_calls)
+            done = self._run_tools(messages, calls, tools, said_with_calls)
+            if done:
+                sentence, values = done
+                yield languages.translate(language, sentence, **values)
+                return
             if self.tools.email.active:   # an email was started: ask for what's missing, word for word
                 yield self.tools.email.next_question(language)
                 return
@@ -235,18 +258,23 @@ class Brain:
         if speak_as_written and not _looks_like_json(content):
             yield from sentences.flush()
         elif content.strip():   # held back the whole time: say it all now
-            yield content.strip()
+            yield from sentences.feed(content)
+            yield from sentences.flush()
         return [], content
 
-    def _run_tools(self, messages: list, calls: list[ToolCall], tools: list, said_with_calls: str = "") -> None:
-        """Run tool calls, adding them and their results to this request's messages and its history."""
+    def _run_tools(self, messages: list, calls: list[ToolCall], tools: list, said_with_calls: str = "") -> tuple[str, dict] | None:
+        """Run tool calls, adding them and their results to this request's messages and its history.
+        Returns what Jarvis says itself about them, like ('It's open.', {}), or None for the model to word them."""
         self.follow_up_tools = tools
         # a call typed out as JSON is recorded as a real one, so the history never shows that habit
         self.tool_messages.append(ollama.Message(
             role="assistant", content=said_with_calls,
             tool_calls=[ollama.Message.ToolCall(function=ollama.Message.ToolCall.Function(name=name, arguments=args))
                         for name, args in calls]))
+        results = []
         for name, args in calls:
             result = self.tools.call(name, args)
+            results.append((name, result))
             self.tool_messages.append({"role": "tool", "content": result, "tool_name": name})
         messages += self.tool_messages[-1 - len(calls):]
+        return self.tools.done_reply(results)

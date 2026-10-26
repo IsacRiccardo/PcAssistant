@@ -26,6 +26,9 @@ Plug the laptop in. On battery Jarvis switches to the smaller 1B model automatic
 - "What time is it?"
 - "Open Spotify" / "Open calculator": any app in your Start menu works, nothing to set up. Jarvis looks them up each time it starts, so it suits whatever PC it runs on. Short names work too ("chrome" for Google Chrome, "vs code" for Visual Studio Code)
 - "Close Excel": the same as clicking its X, so an app with unsaved work still asks whether to save first. Every window of that app closes (all Chrome windows for "close Chrome")
+- "Find my CV" / "Where is the budget spreadsheet?" / "Find the PDFs about invoices": searches your files by name and by the words inside them, through the Windows Search index (the same one the Start menu uses). If it finds one, File Explorer opens with it selected. If it finds several (up to 50), a list pops up above the orb that scrolls with the mouse wheel or the arrow keys: click one, press Enter, type its number, or say "the second one" / "number twelve" to see it in its folder. Say "open the second one" to open it instead
+- "Show me all my PDFs in Downloads" / "Find the pictures on my desktop" / "List the files in my CV folder": only that folder and the ones inside it are searched. A file type on its own (PDFs, pictures, videos, music, Word, Excel, PowerPoint) lists the newest of that type
+- "Open my CV" / "Open downloads" / "Open a PNG from my downloads": anything that isn't an app opens the file or folder with that name, or lets you pick one of that type or in that folder. "Open it" after a search brings the list back to pick the one to open. If several match, the list pops up and the one you pick opens. Without the orb window (text mode, `--no-ui`) Jarvis reads the names out instead
 - "Search the web for Fiat Panda oil type"
 - "How's my battery?"
 - "Turn the volume up" / "Set the volume to 30" / "Mute": steps of 10%, an exact level, or mute and unmute
@@ -50,7 +53,7 @@ Or edit the files by hand. Everything is in `config/config.json`:
 - `model_plugged_in` / `model_on_battery`: any model from ollama.com (run `ollama pull <name>` after changing)
 - `context_size`: how many tokens of conversation the model can see. 2048 lets the 3B model fit entirely on a 4 GB graphics card, which makes replies about 30% faster; raise it to 4096 if Jarvis forgets things in long conversations
 - `keep_alive`: how long the model stays loaded after the last request (e.g. `"30m"`, or `-1` for as long as Jarvis runs). Loading it again takes several seconds
-- `silence_level`: raise it if Jarvis never stops recording in a noisy room, lower it if it cuts you off
+- `silence_level`: how loud you must be for Jarvis to notice you started talking. Once you have, quieter speech still counts as long as it sounds like speech (Whisper's own speech detector judges that), so a soft ending doesn't cut you off. Raise it if background noise starts recordings, lower it if Jarvis doesn't notice you
 - `silence_seconds`: how long you have to be quiet before Jarvis treats the command as finished. Lower is snappier; raise it if Jarvis cuts you off when you pause mid-sentence
 - `follow_up_seconds`: how long Jarvis keeps waiting for your next command before going back to sleep
 - `sleep_phrases`: short phrases that end the conversation right away. This and the other phrase lists can mix languages, and accents don't matter ("café" and "cafe" both work)
@@ -62,8 +65,8 @@ Or edit the files by hand. Everything is in `config/config.json`:
 - `contacts`: names → email addresses (e.g. `"mom": "mom@example.com"`), so you can say "email mom" instead of spelling out the address
 - `browsers`: browsers Jarvis can open sites or new tabs in (command, flags before the URL, blank new-tab page)
 - `tool_words`: for each tool, the words that offer it to the model (`"battery_status": ["battery", "charging"]`). Jarvis only offers the tools whose words your request contains as whole words, in simple forms too ("share" also matches "shares", "rain" matches "raining"), so small talk stays fast and the model picks from just a few. Add a word if a request should trigger a tool but doesn't; an empty list turns the tool off
-- `wake_beep`, `sleep_beep`: the beeps when Jarvis wakes up and goes back to sleep, when it has no `wake_reply` or `sleep_reply` to say (pitch in `hz`, length in `ms`)
-- `sleep_reply`: what Jarvis says when it goes back to sleep, one picked at random (`["Going to sleep.", "Call me if you need me."]`). An empty list plays `sleep_beep` instead
+- `wake_beep`, `sleep_beep`: the beeps when Jarvis wakes up and goes back to sleep, when it has no `wake_reply` or `sleep_reply` to say (pitch in `hz`, length in `ms`). A length of 0 is silent
+- `sleep_reply`: what Jarvis says when it goes back to sleep, one picked at random (`["Going to sleep.", "Call me if you need me."]`). An empty list plays `sleep_beep` instead, so for silence leave it empty and set the `sleep_beep` length to 0
 - `beep_grace_seconds`: how long to ignore the mic after the wake beep, so its echo doesn't start a recording
 - `memory_file`, `log_dir`: where memories and logs are kept, relative to the project folder
 - `ui_config`: the file with the orb's look, relative to the project folder (see below)
@@ -102,6 +105,7 @@ jarvis/            the assistant, run with `python -m jarvis`
     launcher.py    open apps, websites, browser tabs, Google searches
     lookup.py      time, battery, stock prices, web lookups
     email.py       the step-by-step email flow
+    files.py       find files through the Windows Search index, open them, show them in their folder
     system.py      volume, screen brightness, shutting down, sleep and lock
   voice/
     ears.py        wake word, recording, speech to text
@@ -126,3 +130,4 @@ logs/              jarvis.log in debug mode, cleared on each launch
 - **Scripts disabled error**: the task already uses `-ExecutionPolicy Bypass`; if running manually, use `powershell -ExecutionPolicy Bypass -File setup.ps1`.
 - **No microphone input**: Windows Settings > Privacy & security > Microphone, allow desktop apps.
 - **Robotic voice**: Piper failed to install, so it fell back to the Windows voice. Rerun setup.
+- **A file isn't found**: Jarvis only finds what Windows Search indexes, which by default is your user folders (Desktop, Documents, Downloads, Pictures and so on). Add other folders under Windows Settings > Privacy & security > Searching Windows. Hidden folders, `AppData` and code libraries (`venv`, `node_modules`) are always skipped.
