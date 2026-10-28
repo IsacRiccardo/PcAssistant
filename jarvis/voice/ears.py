@@ -1,7 +1,11 @@
 """Ears: wake word, recording a command, and transcribing it."""
+import ctypes
 import logging
 import queue
+import shutil
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
+from pathlib import Path
 
 import numpy as np
 import psutil
@@ -20,6 +24,12 @@ VAD_WINDOW = 512        # samples the speech detector judges at a time
 VAD_SAMPLES = 8 * VAD_WINDOW   # the newest audio it's given for each chunk, a quarter second
 SPEECH_PROBABILITY = 0.5       # how sure it must be that it hears speech
 QUIET_FLOOR = 0.25      # share of silence_level below which even speech counts as silence, like a far-off TV
+EARLY_SILENCE_SECONDS = 0.5   # quiet this long and Whisper starts on what was said, while silence_seconds runs out
+
+
+def _samples(frames: list[np.ndarray]) -> np.ndarray:
+    """Recorded chunks as one clip, the way Whisper takes it."""
+    return np.concatenate(frames).astype(np.float32) / 32768.0
 
 
 def _beep(beep: tuple[int, int]) -> None:
@@ -28,14 +38,45 @@ def _beep(beep: tuple[int, int]) -> None:
         winsound.Beep(*beep)
 
 
+def _preload_cublas() -> None:
+    """Whisper needs NVIDIA's cuBLAS library to run on the graphics card. Ollama comes with a copy, so load
+    that one, and Whisper uses it; without it, Whisper looks for cuBLAS on the PATH."""
+    ollama = shutil.which("ollama")
+    if not ollama:
+        return
+    try:
+        # by its full path rather than by adding its folder to the PATH: the apps Jarvis opens would
+        # inherit that, and with it Ollama's own copies of the Visual C++ runtime
+        ctypes.WinDLL(str(Path(ollama).parent / "lib" / "ollama" / "cuda_v12" / "cublas64_12.dll"))
+    except OSError:
+        pass
+
+
 def _load_whisper(name: str):
+    """Whisper on the NVIDIA graphics card if there is one, where a command takes a fraction of a second
+    instead of about two, or else on the processor."""
+    import ctranslate2
     from faster_whisper import WhisperModel
 
-    options = dict(device="cpu", compute_type="int8", cpu_threads=psutil.cpu_count(logical=False) or 4)
-    try:   # use the downloaded copy without asking Hugging Face for updates on every launch
-        return WhisperModel(name, local_files_only=True, **options)
-    except Exception:
-        return WhisperModel(name, **options)
+    def load(**options):
+        try:   # use the downloaded copy without asking Hugging Face for updates on every launch
+            return WhisperModel(name, local_files_only=True, **options)
+        except Exception:
+            return WhisperModel(name, **options)
+
+    if ctranslate2.get_cuda_device_count():
+        _preload_cublas()
+        try:
+            whisper = load(device="cuda", compute_type="int8_float16")
+            # a missing library only shows when Whisper first hears something, so try it now; that also
+            # gets the card ready, so the first command doesn't wait for it
+            list(whisper.transcribe(np.zeros(SAMPLE_RATE, np.float32), language="en", beam_size=1,
+                                    temperature=0.0)[0])
+            log.info("Whisper runs on the graphics card")
+            return whisper
+        except Exception as e:
+            log.info("Whisper can't use the graphics card (%s), so it runs on the processor", e)
+    return load(device="cpu", compute_type="int8", cpu_threads=psutil.cpu_count(logical=False) or 4)
 
 
 class LanguagePicker:
@@ -75,6 +116,7 @@ class Ears:
         from faster_whisper.vad import get_vad_model
         self.vad = get_vad_model()   # the speech detector Whisper itself uses, to know when the user stops
         self.chunks = queue.Queue()   # microphone audio, CHUNK samples at a time, as it comes in
+        self.transcriber = ThreadPoolExecutor(1)   # one at a time: side by side they'd only slow each other down
         self.transcribe(np.zeros(SAMPLE_RATE, np.float32))   # loads the speech detector now, not on the first command
         log.info("Speech models loaded")
 
@@ -97,17 +139,22 @@ class Ears:
         newest = CHUNK // VAD_WINDOW + 1   # the windows the newest chunk falls in
         return float(np.max(self.vad(recent)[-newest:])) >= SPEECH_PROBABILITY
 
-    def record_command(self, wait_seconds: float) -> np.ndarray | None:
-        """Record until the user stops talking. None if they never started within wait_seconds.
+    def record_command(self, wait_seconds: float) -> Future[tuple[str, str]] | None:
+        """Record until the user stops talking, and transcribe it: what was said and its language, as
+        transcribe returns them. None if they never started within wait_seconds.
         Talking starts when it's louder than silence_level; it ends after silence_seconds without
-        speech. Once they're talking, quieter speech still counts, if the speech detector hears it."""
+        speech. Once they're talking, quieter speech still counts, if the speech detector hears it.
+        Whisper starts as soon as they pause, so it is mostly done by the time the silence shows they
+        have finished. If they go on, that try is dropped."""
         frames, silent, started, loudest = [], 0, False, 0.0
         per_sec = SAMPLE_RATE / CHUNK
         max_chunks = int(self.cfg.max_command_seconds * per_sec)
         silence_chunks = int(self.cfg.silence_seconds * per_sec)
+        early_chunks = min(int(EARLY_SILENCE_SECONDS * per_sec), silence_chunks)
         no_speech_chunks = int(wait_seconds * per_sec)
         grace_chunks = int(self.cfg.beep_grace_seconds * per_sec)
         ended = "the time limit"
+        early = None   # Whisper's go at what was said before the latest pause
         for _ in range(max_chunks):
             chunk = self.chunks.get()
             frames.append(chunk)
@@ -118,9 +165,11 @@ class Ears:
             talking = level > self.cfg.silence_level or (
                 started and level > self.cfg.silence_level * QUIET_FLOOR and self._hears_speech(frames))
             if talking:
-                started, silent = True, 0
+                started, silent, early = True, 0, None   # they went on, so that wasn't all of it
             else:
                 silent += 1
+            if started and silent == early_chunks:
+                early = self.transcriber.submit(self.transcribe, _samples(frames))
             if started and silent >= silence_chunks:
                 ended = "silence"
                 break
@@ -128,7 +177,7 @@ class Ears:
                 return None
         log.info("Recorded %.1f s, loudest %.0f (silence_level %d), ended by %s",
                  len(frames) / per_sec, loudest, self.cfg.silence_level, ended)
-        return np.concatenate(frames).astype(np.float32) / 32768.0
+        return early or self.transcriber.submit(self.transcribe, _samples(frames))
 
     def transcribe(self, audio: np.ndarray) -> tuple[str, str]:
         """What was said, and the language it was said in. With no languages set, Whisper chooses
@@ -137,6 +186,9 @@ class Ears:
         segments, info = self.whisper.transcribe(
             audio, language=languages[0] if languages else None, multilingual=self.picker is not None,
             beam_size=1, vad_filter=True, condition_on_previous_text=False, without_timestamps=True,
+            # one try: unsure of mumbled audio, Whisper would otherwise try again up to 5 times, 5 guesses
+            # each, taking 3 times as long only to come up with different nonsense
+            temperature=0.0,
         )
         text = " ".join(s.text for s in segments).strip()   # the picker picks while this runs
         return text, self.picker.picked if self.picker else info.language
@@ -144,19 +196,19 @@ class Ears:
     def converse(self, on_command: Callable[[str, str], None], dictating: Callable[[], bool],
                  waiting: Callable[[], bool]) -> bool:
         """After the wake word, keep taking commands until the user goes quiet or says 'that's all'.
-        While waiting() is True, like when a list is up to pick from, going quiet doesn't end it.
+        While waiting() is True, like while a popup is up above the orb, going quiet doesn't end it.
         Returns True if the user asked Jarvis to shut down."""
         wait = self.cfg.no_speech_seconds
         while True:
             print("Listening...", flush=True)
             self.status.set_state("listening")
-            audio = self.record_command(wait)
-            if audio is None:
+            heard = self.record_command(wait)
+            if heard is None:
                 if waiting():   # still up to the user: they may pick with the mouse, or say which
                     continue
                 return False
             self.status.set_state("thinking")
-            text, language = self.transcribe(audio)
+            text, language = heard.result()
             if not text:
                 print("(didn't catch that)", flush=True)
                 continue
@@ -174,30 +226,35 @@ class Ears:
             self._drain()       # ignore audio captured while Jarvis was talking
             wait = self.cfg.follow_up_seconds
 
+    def _wait_for_wake_word(self) -> None:
+        while max(self.wake.predict(self.chunks.get()).values()) < self.cfg.wake_threshold:
+            pass
+
     def listen_until_shutdown(self, on_command: Callable[[str, str], None], on_sleep: Callable[[], None],
                               dictating: Callable[[], bool], waiting: Callable[[], bool] = lambda: False,
-                              wake_reply: Callable[[], None] | None = None,
+                              awake: bool = False, wake_reply: Callable[[], None] | None = None,
                               sleep_reply: Callable[[], None] | None = None) -> None:
         """on_command(text, language) handles each request, on_sleep() runs when a conversation ends,
         dictating() is True while the user is answering a question like the email ones, waiting() while
-        Jarvis waits for them to do something, like pick from a list, and mustn't go back to sleep.
+        Jarvis waits for them to do something, like close a popup or pick from it, and mustn't go back
+        to sleep. awake: take a request straight away, as after the greeting, without the wake word.
         wake_reply() answers the wake word, sleep_reply() says Jarvis is going back to sleep; without
         them, a short beep."""
         phrase = " or ".join(f'"{wake_phrase(w)}"' for w in self.cfg.wake_word)
         with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="int16",
                             blocksize=CHUNK, callback=self._on_audio):
-            log.info("Listening... say %s", phrase)
-            self.status.set_state("sleeping")
+            if not awake:
+                log.info("Listening... say %s", phrase)
+                self.status.set_state("sleeping")
             while True:
-                chunk = self.chunks.get()
-                scores = self.wake.predict(chunk)
-                if max(scores.values()) < self.cfg.wake_threshold:
-                    continue
-                if wake_reply:
-                    wake_reply()
-                else:
-                    _beep(self.cfg.wake_beep)
-                self._drain()       # ignore the wake word's tail, and Jarvis's own answer to it
+                if not awake:
+                    self._wait_for_wake_word()
+                    if wake_reply:
+                        wake_reply()
+                    else:
+                        _beep(self.cfg.wake_beep)
+                    self._drain()       # ignore the wake word's tail, and Jarvis's own answer to it
+                awake = False
                 if self.converse(on_command, dictating, waiting):
                     log.info("Shutdown requested")
                     return

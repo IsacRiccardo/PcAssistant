@@ -1,4 +1,4 @@
-"""Opening things on screen: apps, websites, new browser tabs and Google searches. Closing apps."""
+"""Opening things on screen: apps, websites and new browser tabs. Closing apps."""
 import ctypes
 import json
 import logging
@@ -17,6 +17,7 @@ from urllib.parse import quote_plus
 import psutil
 
 from ..config import Config
+from .web import GOOGLE
 
 log = logging.getLogger("jarvis")
 
@@ -265,20 +266,12 @@ class Launcher:
 
     def _address(self, url: str) -> str:
         """The full address for a site name ('gmail'), a bare domain ('youtube.com') or an address;
-        empty for a blank new tab."""
+        empty for a blank new tab. Anything else, like 'weather', is searched for on Google."""
         url = self.cfg.sites.get(url.lower(), url)
         if url.lower() in ("new tab", "newtab", "blank"):
             return ""
+        if url and "." not in url and ":" not in url:   # not an address: 'https://weather' goes nowhere
+            return GOOGLE.format(quote_plus(url))
         if url and ":" not in url.split("/")[0]:  # bare domain like 'youtube.com'
             return "https://" + url
         return url
-
-    @staticmethod
-    def search_web(query: str) -> str:
-        """Open Google search results in the browser, ONLY when the user wants to see the results on screen.
-
-        Args:
-          query: What to search for
-        """
-        webbrowser.open("https://www.google.com/search?q=" + quote_plus(query))
-        return f"Opened a Google search for {query}."

@@ -151,7 +151,7 @@ BRIGHTNESS_SCRIPT = (
 )
 
 
-def _powershell(script: str) -> subprocess.CompletedProcess:
+def powershell(script: str) -> subprocess.CompletedProcess:
     return subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
                           capture_output=True, text=True, timeout=15, creationflags=subprocess.CREATE_NO_WINDOW)
 
@@ -171,7 +171,7 @@ def set_brightness(level: str) -> str:
             return f"Failed: '{level}' isn't a brightness. Use up, down, a change like +20, a percentage, or check."
         kind, amount = change   # whole numbers only, so nothing the model wrote reaches the script
         new = f"[Math]::Min(100, [Math]::Max(0, $current + {amount}))" if kind == "by" else str(_clamp(amount))
-    result = _powershell(BRIGHTNESS_SCRIPT.format(new=new))
+    result = powershell(BRIGHTNESS_SCRIPT.format(new=new))
     if result.returncode != 0 or not result.stdout.strip():
         log.info("[brightness] %s", result.stderr.strip()[:300])
         return ("Failed: Windows can't change this screen's brightness. That works on laptop screens; "

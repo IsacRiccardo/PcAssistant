@@ -146,7 +146,7 @@ class Orb(Status):
 
     # Called from the voice thread: plain attribute writes, picked up by the next frame
     def set_state(self, state: str) -> None:
-        if self.state == "sleeping" and state == "listening":
+        if self.state in ("sleeping", "starting") and state == "listening":
             self.you = self.reply = ""       # fresh caption for a new conversation
         self.state = state
 

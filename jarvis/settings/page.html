@@ -433,8 +433,8 @@ const wakePhrase = value => value.split("/").pop().replace(/\.onnx$/, "").replac
 const wakeOptions = () => (info.wake_words || []).map(value => ({ value, label: titleCase(wakePhrase(value)) }));
 const TOOL_LABELS = {   // the tools in jarvis/tools/, by function name
   get_time: "Time and date", open_app: "Open an app", close_app: "Close an app",
-  open_website: "Open a website or tab", search_web: "Google search on screen", compose_email: "Write an email",
-  get_weather: "Weather", get_stock_price: "Stock and crypto prices", web_lookup: "Look up news and facts",
+  open_website: "Open a website or tab", search_web: "Search the web, results on screen", compose_email: "Write an email",
+  get_weather: "Weather", get_stock_price: "Stock and crypto prices",
   battery_status: "Battery", remember: "Remember a fact",
   set_volume: "Volume", set_brightness: "Screen brightness", computer_power: "Shut down, restart, sleep, lock",
   find_files: "Find files", open_file: "Open a file", show_in_folder: "Show a file in its folder",
@@ -513,9 +513,9 @@ const SECTIONS = [
       { key: "silence_seconds", label: "Pause that ends a command", type: "slider", min: 0.1, max: 10, range: [0.3, 4], step: 0.1, unit: "s",
         help: "How long you stay quiet before Jarvis treats the command as finished. Lower is snappier; raise it if Jarvis cuts you off when you pause mid-sentence." },
       { key: "no_speech_seconds", label: "Time to start talking", type: "slider", min: 0.5, max: 60, range: [1, 30], step: 0.5, unit: "s",
-        help: "After the wake word, how long Jarvis waits for you to start speaking." },
+        help: "After the wake word, or the greeting when Jarvis starts, how long it waits for you to start speaking." },
       { key: "follow_up_seconds", label: "Follow-up window", type: "slider", min: 0, max: 300, range: [0, 60], step: 0.5, unit: "s",
-        help: "After each reply, how long Jarvis keeps listening for your next command before going back to sleep." },
+        help: "After each reply, how long Jarvis keeps listening for your next command before going back to sleep. While a list, web results or a card is up above the orb, it keeps listening until you close it." },
       { key: "max_command_seconds", label: "Longest command", type: "slider", min: 1, max: 600, range: [3, 120], step: 1, unit: "s",
         help: "Recording stops after this long, even if you're still talking." },
     ] },

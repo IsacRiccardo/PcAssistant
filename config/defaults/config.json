@@ -39,7 +39,10 @@
     "open_app": ["open", "launch", "start"],
     "close_app": ["close", "quit", "exit", "kill"],
     "open_website": ["open", "website", "site", "tab", "tabs", "browser"],
-    "search_web": ["search", "google"],
+    "search_web": [
+      "search", "google", "look up", "find out", "online", "news", "headlines", "latest", "current",
+      "happening", "score", "scores", "who won"
+    ],
     "compose_email": ["email", "e-mail", "mail", "compose", "send", "write to"],
     "get_weather": [
       "weather", "forecast", "temperature", "degrees", "rain", "raining", "snow", "snowing", "sunny",
@@ -48,10 +51,6 @@
     "get_stock_price": [
       "price", "prices", "stock", "stocks", "shares", "market", "crypto", "bitcoin", "ethereum",
       "nasdaq", "dow jones", "s&p"
-    ],
-    "web_lookup": [
-      "look up", "find out", "search", "news", "headlines", "latest", "current", "happening",
-      "score", "scores", "who won"
     ],
     "battery_status": ["battery", "charge", "charging", "plugged"],
     "remember": ["remember", "don't forget", "note that"],

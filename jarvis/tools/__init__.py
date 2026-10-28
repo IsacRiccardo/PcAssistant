@@ -15,13 +15,15 @@ from ..phrases import words
 from .email import EmailComposer
 from .files import FileSearch
 from .launcher import Launcher
-from .lookup import Weather, battery_status, get_stock_price, get_time, web_lookup
+from .lookup import Stocks, Weather, battery_status, get_time
 from .system import Power, level_asked, set_brightness, set_volume
+from .web import WebSearch
 
 log = logging.getLogger("jarvis")
 
 # What Jarvis says itself when one of these worked, since the model would go on about it:
-# tool -> (how its result starts when it worked, the reply). The file tools set their own (FileSearch.reply).
+# tool -> (how its result starts when it worked, the reply). The tools that show things above the orb
+# set their own (Tools.showing).
 DONE_REPLIES = {
     "open_app": ("Opened ", "It's open."),
     "open_website": ("Opened ", "It's open."),
@@ -63,10 +65,15 @@ class Tools:
         self.launcher = Launcher(cfg, self.files.open_document)
         self.email = EmailComposer(cfg)
         self.weather = Weather()
+        self.stocks = Stocks()
         self.power = Power()
+        self.web = WebSearch()
+        # tools that show what they found above the orb (a list of files, web results, a card) and then
+        # say themselves what Jarvis replies (their reply), rather than have the model talk about it
+        self.showing = [self.files, self.web, self.weather, self.stocks]
         self.functions = [get_time, self.launcher.open_app, self.launcher.close_app, self.launcher.open_website,
-                          self.launcher.search_web, self.email.compose_email, self.weather.get_weather,
-                          get_stock_price, web_lookup, battery_status, self.remember,
+                          self.web.search_web, self.email.compose_email, self.weather.get_weather,
+                          self.stocks.get_stock_price, battery_status, self.remember,
                           set_volume, set_brightness, self.power.computer_power,
                           self.files.find_files, self.files.open_file, self.files.show_in_folder]
         self.by_name = {f.__name__: f for f in self.functions}
@@ -98,6 +105,17 @@ class Tools:
             args = self.weather.follow_up_args(request, also)
             if args:
                 return [("get_weather", args)]
+        # 'and Nvidia?' right after a stock price: that company
+        if previous and self.stocks.get_stock_price in previous:
+            args = self.stocks.follow_up_args(request)
+            if args:
+                return [("get_stock_price", args)]
+        # 'show me the weather in Vienna': with an earlier failure in the conversation, small models
+        # answer that it failed again instead of calling the tool
+        if offered and self.weather.get_weather in offered:
+            args = self.weather.asked_args(request)
+            if args:
+                return [("get_weather", args)]
         # 'open the second one' or 'where is it?' right after a file search
         pick = self.files.follow_up(request)
         if pick:
@@ -124,13 +142,19 @@ class Tools:
                 return [(tool.__name__, {"level": level})]
         return []
 
+    def show_on(self, screen) -> None:
+        """Where the tools show what they found: the orb window (a Status)."""
+        for tool in self.showing:
+            tool.screen = screen
+
     def begin(self, request: str) -> None:
         """A new request: tools can check the model's arguments against what the user actually said."""
-        self.launcher.request = self.weather.request = self.power.request = request
+        self.launcher.request = self.weather.request = self.power.request = self.web.request = request
 
     def call(self, name: str, args: dict) -> str:
         fn = self.by_name.get(name)
-        self.files.reply = None   # only this call's counts
+        for tool in self.showing:   # only this call's reply counts
+            tool.reply = None
         if fn is None:
             result = f"Failed: there is no tool called {name}. Use one of: {', '.join(self.by_name)}."
         else:
@@ -144,8 +168,10 @@ class Tools:
     def done_reply(self, results: list[tuple[str, str]]) -> tuple[str, dict] | None:
         """What Jarvis says itself after these (tool name, result) pairs, as (sentence, its values):
         'It's open.', or the files it found. None for the model to word them, like when one failed."""
-        if len(results) == 1 and self.files.reply:   # a file tool, or open_app that opened a file
-            return self.files.reply
+        # one of the tools that show what they found (or open_app that opened a file)
+        reply = next((tool.reply for tool in self.showing if tool.reply), None)
+        if len(results) == 1 and reply:
+            return reply
         worked = all(name in DONE_REPLIES and result.startswith(DONE_REPLIES[name][0]) for name, result in results)
         replies = {DONE_REPLIES[name][1] for name, _ in results if name in DONE_REPLIES}
         return (replies.pop(), {}) if results and worked and len(replies) == 1 else None

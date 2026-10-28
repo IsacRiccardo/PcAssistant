@@ -13,13 +13,15 @@ Runs fully offline on your laptop: wake word (openWakeWord) → speech to text (
 ## Running
 
 - **Terminal > Run Task... > Run Jarvis (text mode)**: type to it. Test this first.
-- **Terminal > Run Task... > Run Jarvis (voice)**: say "Hey Jarvis", wait for it to answer "Yes?", then talk. After each reply it keeps listening, so you can give the next command without the wake word. It goes back to sleep (it says "Going to sleep.") once you stay quiet for `follow_up_seconds` or say "that's all".
-  When Jarvis wakes up, an animated orb fades in at the bottom centre of the screen, just above the taskbar, floating over whatever is on screen. It reacts to your voice while listening, spins while thinking and pulses with Jarvis's voice while speaking, with a caption of what you said and the reply. It fades away when Jarvis goes back to sleep. Clicks pass straight through it and it never takes keyboard focus, so it can't get in your way. To quit, say "shut down" while Jarvis is listening (or press Ctrl+C in the terminal, or close it). Run `python -m jarvis --no-ui` for voice mode without the orb.
+- **Terminal > Run Task... > Run Jarvis (voice)**: once it has said its greeting it's listening, so ask away. After that, say "Hey Jarvis", wait for it to answer "Yes?", then talk. After each reply it keeps listening, so you can give the next command without the wake word. It goes back to sleep (it says "Going to sleep.") once you stay quiet for `follow_up_seconds` or say "that's all". While a list, web results or a card is up above the orb, it stays awake until you close it or pick something from it; "that's all" closes it too.
+  When Jarvis wakes up, an animated orb fades in at the bottom centre of the screen, just above the taskbar, floating over whatever is on screen. It reacts to your voice while listening, spins while thinking and pulses with Jarvis's voice while speaking, with a caption of what you said and the reply. It fades away when Jarvis goes back to sleep. Clicks pass straight through it and it never takes keyboard focus, so it can't get in your way. Popups above it rise into place with their rows following one after another, rows light up under the mouse, lists glide as they scroll, and a stock's chart draws itself in. To quit, say "shut down" while Jarvis is listening (or press Ctrl+C in the terminal, or close it). Run `python -m jarvis --no-ui` for voice mode without the orb.
 - Or press **F5** and pick a configuration to run with the debugger.
 
 The tasks and F5 configurations marked "debug log" also write a detailed log to `logs/jarvis.log`.
 
 Plug the laptop in. On battery Jarvis switches to the smaller 1B model automatically.
+
+With an NVIDIA graphics card, speech recognition runs on it, next to the AI model, using the cuBLAS library that comes with Ollama. That makes each command about 2 seconds quicker than on the processor, which Jarvis falls back to if it can't use the card (the debug log says which one it uses).
 
 ## Try saying
 
@@ -29,7 +31,9 @@ Plug the laptop in. On battery Jarvis switches to the smaller 1B model automatic
 - "Find my CV" / "Where is the budget spreadsheet?" / "Find the PDFs about invoices": searches your files by name and by the words inside them, through the Windows Search index (the same one the Start menu uses). If it finds one, File Explorer opens with it selected. If it finds several (up to 50), a list pops up above the orb that scrolls with the mouse wheel or the arrow keys: click one, press Enter, type its number, or say "the second one" / "number twelve" to see it in its folder. Say "open the second one" to open it instead
 - "Show me all my PDFs in Downloads" / "Find the pictures on my desktop" / "List the files in my CV folder": only that folder and the ones inside it are searched. A file type on its own (PDFs, pictures, videos, music, Word, Excel, PowerPoint) lists the newest of that type
 - "Open my CV" / "Open downloads" / "Open a PNG from my downloads": anything that isn't an app opens the file or folder with that name, or lets you pick one of that type or in that folder. "Open it" after a search brings the list back to pick the one to open. If several match, the list pops up and the one you pick opens. Without the orb window (text mode, `--no-ui`) Jarvis reads the names out instead
-- "Search the web for Fiat Panda oil type"
+- "Search the web for Fiat Panda oil type" / "What's the latest news?" / "Who won the match last night?": the results pop up above the orb like a search page (title, site and the start of each page), and Jarvis just says "Here's what I found on the web." instead of reading them out. Click one, press Enter or type its number to open it in your browser, or use the link at the bottom to see the whole search on Google. Esc, the X or clicking elsewhere closes it. Without the orb window (text mode, `--no-ui`) the Google search opens in the browser instead
+- "What's the weather in Milan?" / "And tomorrow?" / "Will it rain on Friday?" / "What's the forecast for the weekend?": a card pops up above the orb with the weather now and the week ahead, with the days you asked about highlighted, and Jarvis says the gist in one sentence ("It's 14 degrees in Milan, partly cloudy.") Without a city ("What's the weather?", "Will it rain tomorrow?") it's the weather where the PC is, from the Windows location service: in Settings > Privacy > Location, location must be on and desktop apps allowed to use it. Only that location, rounded to about a kilometre, leaves the PC, to get the forecast and the town's name (from OpenStreetMap)
+- "What's the Nvidia stock price?" / "And Apple?" / "How much is bitcoin?": a card with the price, how it moved today (green or red), a chart of the day against yesterday's close, and the day's and year's range. Jarvis says the price and the change. Its link opens the page on Yahoo Finance
 - "How's my battery?"
 - "Turn the volume up" / "Set the volume to 30" / "Mute": steps of 10%, an exact level, or mute and unmute
 - "Make the screen brighter" / "Set the brightness to 50": works on laptop screens; external monitors need their own buttons
@@ -55,7 +59,7 @@ Or edit the files by hand. Everything is in `config/config.json`:
 - `keep_alive`: how long the model stays loaded after the last request (e.g. `"30m"`, or `-1` for as long as Jarvis runs). Loading it again takes several seconds
 - `silence_level`: how loud you must be for Jarvis to notice you started talking. Once you have, quieter speech still counts as long as it sounds like speech (Whisper's own speech detector judges that), so a soft ending doesn't cut you off. Raise it if background noise starts recordings, lower it if Jarvis doesn't notice you
 - `silence_seconds`: how long you have to be quiet before Jarvis treats the command as finished. Lower is snappier; raise it if Jarvis cuts you off when you pause mid-sentence
-- `follow_up_seconds`: how long Jarvis keeps waiting for your next command before going back to sleep
+- `follow_up_seconds`: how long Jarvis keeps waiting for your next command before going back to sleep. While something is up above the orb, it waits until you close it
 - `sleep_phrases`: short phrases that end the conversation right away. This and the other phrase lists can mix languages, and accents don't matter ("café" and "cafe" both work)
 - `shutdown_phrases`, `farewell`: short phrases that stop Jarvis completely, and what it says before it goes. They only count as a short command on its own (5 words or fewer), so "shut down" works but a longer sentence containing it doesn't
 - `wake_word`: what wakes Jarvis up: one or more of `hey_jarvis`, `alexa`, `hey_mycroft` and `hey_rhasspy` (`["hey_jarvis", "alexa"]`; any of them works). For your own phrase you need an openWakeWord model for it (a `.onnx` file: train one with openWakeWord's training notebook, or download one someone shared). Put it in the `wake_words` folder and pick it on the settings page, or add its path to the list, like `"wake_words/hey_computer.onnx"`
@@ -102,8 +106,9 @@ jarvis/            the assistant, run with `python -m jarvis`
   memory.py        facts Jarvis remembers about you
   phrases.py       matching short commands like "shut down"
   tools/           what the model can do
-    launcher.py    open apps, websites, browser tabs, Google searches
-    lookup.py      time, battery, stock prices, web lookups
+    launcher.py    open apps, websites, browser tabs
+    lookup.py      time, battery, and the weather and stock prices, shown in a card above the orb
+    web.py         web searches, with the results shown above the orb
     email.py       the step-by-step email flow
     files.py       find files through the Windows Search index, open them, show them in their folder
     system.py      volume, screen brightness, shutting down, sleep and lock
@@ -112,7 +117,7 @@ jarvis/            the assistant, run with `python -m jarvis`
     mouth.py       text to speech
   ui/
     orb.py         how the floating orb overlay moves
-    hud.py         draws it with Qt
+    hud.py         draws it with Qt, and the popups above it: lists of files, web results, cards
     config.py      loads config/ui.json
     status.py      what the voice loop reports to the orb
   settings/        the settings page, run with `python -m jarvis.settings`

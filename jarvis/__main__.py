@@ -43,7 +43,8 @@ def setup_logging(log_dir: Path, debug: bool) -> None:
     else:
         warnings.simplefilter("ignore")                   # library warnings would only clutter the terminal
     logging.basicConfig(level=logging.INFO, handlers=handlers)
-    for noisy in ("httpx", "httpcore", "comtypes"):       # skip one line per Ollama request, and COM's setup
+    # skip one line per Ollama request, COM's setup, and the dozen requests behind each web search
+    for noisy in ("httpx", "httpcore", "comtypes", "ddgs"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
@@ -91,18 +92,20 @@ def run_voice(cfg: Config, brain: Brain, no_ui: bool) -> None:
     from .ui import Status
 
     status = Status() if no_ui else make_hud(cfg)
-    brain.tools.files.screen = status   # several files found: a list to click one of, over the orb
+    # over the orb: a list of files to click one of, web results, the weather or a stock price
+    brain.tools.show_on(status)
 
     def voice():
         from .voice import Ears, Mouth
 
         mouth = Mouth(cfg, status)
         with ThreadPoolExecutor(1) as pool:
-            # speech models load while the greeting plays (loading both at once only competes for the CPU)
+            # the greeting is synthesized while the speech models load, and said once they have: it asks
+            # how Jarvis can help, so it should hear the answer (and the orb shouldn't go back to starting up)
             loading = pool.submit(Ears, cfg, status)
-            mouth.say(cfg.greeting)
-            mouth.prepare(cfg.wake_reply + cfg.sleep_reply)
+            mouth.prepare((cfg.greeting, *cfg.wake_reply, *cfg.sleep_reply))
             ears = loading.result()
+            mouth.say(cfg.greeting)
 
         def answer(text: str, language: str) -> None:
             mouth.say(brain.reply(text, language), language)   # spoken sentence by sentence as it's written
@@ -110,11 +113,16 @@ def run_voice(cfg: Config, brain: Brain, no_ui: bool) -> None:
         def answer_wake_word() -> None:
             mouth.say(random.choice(cfg.wake_reply))
 
+        def go_to_sleep() -> None:
+            brain.end_conversation()
+            status.close_choices()   # after "that's all", nothing is left up above the orb
+
         def say_going_to_sleep() -> None:
             mouth.say(random.choice(cfg.sleep_reply))
 
-        ears.listen_until_shutdown(answer, on_sleep=brain.end_conversation, dictating=lambda: brain.dictating,
-                                   waiting=lambda: status.choosing,   # a list of files is up to pick from
+        ears.listen_until_shutdown(answer, on_sleep=go_to_sleep, dictating=lambda: brain.dictating,
+                                   waiting=lambda: status.popup_open,   # up until the user closes it or picks
+                                   awake=True,   # the greeting asks how it can help, so it listens straight away
                                    wake_reply=answer_wake_word if cfg.wake_reply else None,   # None: a beep
                                    sleep_reply=say_going_to_sleep if cfg.sleep_reply else None)
         mouth.say(cfg.farewell)
