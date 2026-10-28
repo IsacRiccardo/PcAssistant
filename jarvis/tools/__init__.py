@@ -21,13 +21,10 @@ from .web import WebSearch
 
 log = logging.getLogger("jarvis")
 
-# What Jarvis says itself when one of these worked, since the model would go on about it:
-# tool -> (how its result starts when it worked, the reply). The tools that show things above the orb
-# set their own (Tools.showing).
-DONE_REPLIES = {
-    "open_app": ("Opened ", "It's open."),
-    "open_website": ("Opened ", "It's open."),
-}
+# The tools that open things. When they all worked, Jarvis says itself what it opened
+# (Launcher.opening), since the model would go on about it. The tools that show things above the orb
+# set their own reply (Tools.showing).
+OPENING = {"open_app", "open_website"}
 
 
 def _clean_arguments(fn, args: dict) -> dict:
@@ -150,6 +147,7 @@ class Tools:
     def begin(self, request: str) -> None:
         """A new request: tools can check the model's arguments against what the user actually said."""
         self.launcher.request = self.weather.request = self.power.request = self.web.request = request
+        self.launcher.opened = []
 
     def call(self, name: str, args: dict) -> str:
         fn = self.by_name.get(name)
@@ -167,14 +165,14 @@ class Tools:
 
     def done_reply(self, results: list[tuple[str, str]]) -> tuple[str, dict] | None:
         """What Jarvis says itself after these (tool name, result) pairs, as (sentence, its values):
-        'It's open.', or the files it found. None for the model to word them, like when one failed."""
+        'Opening app spotify now.', or the files it found. None for the model to word them, like when one failed."""
         # one of the tools that show what they found (or open_app that opened a file)
         reply = next((tool.reply for tool in self.showing if tool.reply), None)
         if len(results) == 1 and reply:
             return reply
-        worked = all(name in DONE_REPLIES and result.startswith(DONE_REPLIES[name][0]) for name, result in results)
-        replies = {DONE_REPLIES[name][1] for name, _ in results if name in DONE_REPLIES}
-        return (replies.pop(), {}) if results and worked and len(replies) == 1 else None
+        # apps and websites, all of them opened: 'Opening apps notepad and calculator now.'
+        opened = all(name in OPENING and result.startswith("Opened ") for name, result in results)
+        return self.launcher.opening() if results and opened and self.launcher.opened else None
 
     def remember(self, fact: str) -> str:
         """Save a fact about the user to long-term memory, when the user asks you to remember something.

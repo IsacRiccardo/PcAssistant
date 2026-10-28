@@ -125,6 +125,11 @@ def _installed(name: str) -> bool:
     return False
 
 
+def _site_name(url: str) -> str:
+    """A site as Jarvis says it: 'gmail' as it is, 'youtube.com' for 'https://www.youtube.com/watch?v=...'."""
+    return re.sub(r"^(\w+://)?(www\.)?|/.*$", "", url.strip())
+
+
 def _start(*args: str) -> None:
     subprocess.Popen(["cmd", "/c", "start", "", *args], shell=False)
 
@@ -133,6 +138,7 @@ class Launcher:
     def __init__(self, cfg: Config, open_document: Callable[[str], str | None] | None = None):
         self.cfg = cfg
         self.request = ""   # what the user just said, set by Tools.begin
+        self.opened: list[tuple[str, str]] = []   # for this request: ('app', 'notepad'), ('site', 'youtube')
         self.open_document = open_document   # for 'open my resume': a file, when no app has that name
         # this PC's apps (Start menu name -> what opens it), looked up fresh each launch since every
         # PC has different ones; that takes a few seconds, so it runs in the background
@@ -190,6 +196,7 @@ class Launcher:
                 os.startfile(target)   # straight to Windows, so no cmd quoting to trip over
             else:
                 _start(target)
+            self.opened.append(("app", name.strip()))
             return f"Opened {name}."
         except Exception as e:
             return f"Failed to open {name}: {e}"
@@ -240,6 +247,7 @@ class Launcher:
         asked = (browser or "").lower().strip()
         if not url and asked in self.cfg.sites:   # site put in the wrong argument, e.g. browser='gmail'
             url, asked = asked, ""
+        site = _site_name(url) or "a new tab"   # how Jarvis names it: 'gmail', 'youtube.com'
         url = self._address(url)
 
         # substring match so 'microsoft edge' finds 'edge' and 'google chrome' finds 'chrome'
@@ -256,13 +264,24 @@ class Launcher:
             if not url:
                 return f"Say which browser to open a new tab in: {known}."
             webbrowser.open(url)
+            self.opened.append(("site", site))
             return f"Opened {url} in the default browser."
         chosen = self.cfg.browsers[name]
         try:
             _start(chosen.command, *chosen.args, url or chosen.new_tab)
+            self.opened.append(("site", site))
             return f"Opened {url or 'a new tab'} in {name}."
         except Exception as e:
             return f"Failed to open {name}: {e}"
+
+    def opening(self) -> tuple[str, dict]:
+        """What Jarvis says about what it opened for this request, as (sentence, its values):
+        'Opening app notepad now.', 'Opening apps notepad and calculator now.', 'Opening youtube now.'"""
+        names = [name for _, name in self.opened]
+        said = names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+        if any(kind != "app" for kind, _ in self.opened):
+            return "Opening {names} now.", {"names": said}
+        return ("Opening app {names} now." if len(names) == 1 else "Opening apps {names} now."), {"names": said}
 
     def _address(self, url: str) -> str:
         """The full address for a site name ('gmail'), a bare domain ('youtube.com') or an address;
